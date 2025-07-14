@@ -1,0 +1,17 @@
+[project]
+name = "qa-platform"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi-users-db-sqlmodel>=0.3.0",
+    "fastapi-users[sqlalchemy]>=14.0.1",
+    "fastapi[standard]>=0.116.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.20",
+    "requests>=2.32.4",
+    "sqlmodel>=0.0.24",
+    "uvicorn>=0.35.0",
+]
