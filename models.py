@@ -1,51 +1,285 @@
+from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, JSON, Computed, Float, String, case
+
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
 from typing import Optional, List
-from pydantic import ConfigDict
+from pydantic import ConfigDict, BaseModel
 import datetime
 
 class User(SQLModelBaseUserDB, table=True):
-
     # <-- tell Pydantic to allow SQLAlchemy Mapped[...] types
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # override the id field to be int instead of UUID
     id: int = Field(default=None, primary_key=True)
 
-    # id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True)
-    # email: str = Field(unique=True, index=True)
-    # hashed_password: str
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
-    # Relationships
-    questions: List["Question"] = Relationship(back_populates="author")
-    answers: List["Answer"] = Relationship(back_populates="author")
+    balance: float = Field(default=0.0)
 
-class Question(SQLModel, table=True):
+    # Relationships
+    buyer_profile: Optional["HumanBuyer"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"uselist": False}
+    )
+    seller_profile: Optional["HumanSeller"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"uselist": False}
+    )
+
+
+class LLMBuyerType(BaseModel):
+    # an AI agent, which can be instantiated into specific LLMBuyers
+    name: Optional[str] = "gpt-4o_basic"
+    description: Optional[str] = "basic GPT-4o LLM buyer"
+    querier_model: str = "openrouter/openai/chatgpt-4o-latest"
+    querier_system_prompt: str = "You are a helpful assistant."
+    decider_model: str = "openrouter/openai/chatgpt-4o-latest"
+    decider_system_prompt: str = "You are a helpful assistant."
+    max_budget: float = 50.0
+
+# class LLMContext(BaseModel):
+#     history: list["DecisionContext"] = []
+#     info_offers_being_inspected: list["InfoOffer"] = []
+#     info_offers_already_purchased: list["InfoOffer"] = []
+
+# class Buyer(SQLModel, table=True):
+#     __tablename__ = "buyer"
+#     id: Optional[int] = Field(default=None, primary_key=True)
+#     type: str = Field(
+#         sa_column=Column(String, nullable=False),
+#         index=True,
+#         description="Type of buyer ('human_buyer' or 'llm_buyer')",
+#     )
+
+#     # polymorphic config
+#     __mapper_args__ = {
+#         "polymorphic_identity": "buyer",
+#         "polymorphic_on": type,
+#     }
+
+#     # Relationships
+#     decision_contexts: List["DecisionContext"] = Relationship(
+#         back_populates="buyer", sa_relationship_kwargs={"lazy": "selectin"}
+#     )
+
+
+class HumanBuyer(SQLModel, table=True):
+    # __tablename__ = "human_buyer"
+
+    # id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+
+    # Settings/defaults
+    default_child_llm: LLMBuyerType = Field(
+        default_factory=LLMBuyerType, sa_column=Column(JSON, nullable=False)
+    )
+    default_max_budget: float = Field(default=50.0)
+    # autoinspect: bool = Field(default=True)
+    # autoinspect_n: int = Field(default=3)
+
+    # Collectable data
+    num_queries: dict[int, int] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+        description="Number of queries made by the buyer, by priority",
+    )  # maps priority to number of queries with that priority
+    num_inspected: dict[int, int] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+        description="Number of queries where an inspection was done by the buyer, by priority",
+    )
+    num_purchased: dict[int, int] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+        description="Number of queries where a purchase was made by the buyer, by priority",
+    )
+    inspection_rate: dict[int, float] = Field(
+        sa_column=Column(
+            Float,
+            Computed(
+                case(
+                    (Column("num_queries") == 0, 0.0),
+                    else_=Column("num_inspected") / Column("num_queries"),
+                )
+            ),
+            nullable=False,
+            default=0.0,
+        ),
+        description="Inspection rate for queries of each priority",
+    )
+    purchase_rate: dict[int, float] = Field(
+        sa_column=Column(
+            Float,
+            Computed(
+                case(
+                    (Column("num_queries") == 0, 0.0),
+                    else_=Column("num_purchased") / Column("num_queries"),
+                )
+            ),
+            nullable=False,
+            default=0.0,
+        ),
+        description="Purchase rate for queries of each priority",
+    )
+
+    # Relationships
+    user: User = Relationship(back_populates="buyer_profile")
+
+
+# class LLMBuyer(Buyer, table=True):
+#     __tablename__ = "llm_buyer"
+#     id: Optional[int] = Field(foreign_key="buyer.id", primary_key=True)
+#     llm: LLMBuyerType = Field(
+#         default_factory=LLMBuyerType, sa_column=Column(JSON, nullable=False)
+#     )
+#     # polymorphic config
+#     __mapper_args__ = {"polymorphic_identity": "llm_buyer"}
+
+
+class Seller(SQLModel, table=True):
+    __tablename__ = "seller"
     id: Optional[int] = Field(default=None, primary_key=True)
-    title: str
-    content: str
-    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+    type: str = Field(
+        sa_column=Column(String, nullable=False),
+        index=True,
+        description="Type of seller ('human_seller' or 'llm_seller')",
+    )
 
-    # Foreign key
-    author_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    # polymorphic config
+    __mapper_args__ = {
+        "polymorphic_identity": "seller",
+        "polymorphic_on": type,
+    }
 
     # Relationships
-    author: "User" = Relationship(back_populates="questions")
-    answers: List["Answer"] = Relationship(back_populates="question")
+    matchers: List["SellerMatcher"] = Relationship(back_populates="seller")
 
-class Answer(SQLModel, table=True):
+
+class HumanSeller(Seller, table=True):
+    __tablename__ = "human_seller"
+
+    id: int = Field(foreign_key="seller.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "human_seller",
+    }
+
+    # Relationships
+    user: User = Relationship(back_populates="seller_profile")
+
+
+class SellerMatcher(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    content: str
-    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
-    votes: int = Field(default=0)
-
-    # Foreign keys
-    author_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    question_id: Optional[int] = Field(default=None, foreign_key="question.id")
+    seller_id: int = Field(foreign_key="seller.user_id", index=True)
+    keywords: Optional[List[str]] = Field(
+        sa_column=Column(JSON, index=True), default=None, description="Keywords to look out for: None to get everything"
+    )
+    context_pages: Optional[List[str]] = Field(
+        sa_column=Column(JSON, index=True), default=None, description="Context pages to consider: None to get everything"
+    )
+    min_max_budget: float = Field(default=0.0, index=True, description="Minimum max_budget the buyer should have")
+    min_inspection_rate: float = Field(default=0.0, index=True, description="Minimum inspection rate the buyer should have for that priority of query")
+    min_purchase_rate: float = Field(default=0.0, index=True, description="Minimum purchase rate the buyer should have for that priority of query")
+    min_priority: int = Field(default=0, index=True, description="Minimum priority query to match")
+    buyer_type: Optional[str] = Field(
+        sa_column=Column(String, nullable=False),
+        index=True,
+        description="Type of buyer ('human_buyer' or 'llm_buyer'); None to match both",
+        default=None,
+    )
+    buyer_llm_model: Optional[List[str]] = Field(
+        sa_column=Column(JSON, index=True), default=None, description="Decider models to match; None to match all models"
+    )
+    buyer_system_prompt: Optional[List[str]] = Field(
+        sa_column=Column(JSON, index=True), default=None, description="Keywords in Decider system prompts to match; None to get everything"
+    )
+    age_limit: Optional[int] = Field(
+        default=60 * 60 * 24 * 7,  # 1 week
+        description="Maximum age of a decision context in seconds to be considered for matching; None to get everything",
+        index=True,
+    )
 
     # Relationships
-    author: "User" = Relationship(back_populates="answers")
-    question: "Question" = Relationship(back_populates="answers")
+    seller: Seller = Relationship(back_populates="matchers")
+
+class DecisionContextInfoOfferLink(SQLModel, table=True):
+    context_id:   int = Field(foreign_key="decisioncontext.id", primary_key=True)
+    info_offer_id:int = Field(foreign_key="infooffer.id",       primary_key=True)
+
+
+class DecisionContext(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    query: str = Field(index=True)
+    context_pages: List[str] = Field(sa_column=Column(JSON, index=True), default_factory=list)
+
+    # for recursive decision contexts
+    parent_id: Optional[int] = Field(default=None, foreign_key="decisioncontext.id", index=True)
+    info_offers_being_inspected: List["InfoOffer"] = Relationship(
+        back_populates="contexts_being_inspected",
+        link_model=DecisionContextInfoOfferLink,
+    )
+
+    info_offers_already_purchased: List["InfoOffer"] = Relationship(
+        back_populates="contexts_already_purchased",
+        link_model=DecisionContextInfoOfferLink,
+    )
+
+    # history: Optional[List["DecisionContext"]] = Field(
+    #     sa_column=Column(JSON, index=True),
+    #     default=None,
+    #     description="History of previous decision contexts",
+    # )
+    # info_offers_being_inspected: Optional[List["InfoOffer"]] = Field(
+    #     sa_column=Column(JSON, index=True),
+    #     default=None,
+    #     description="Info offers currently being inspected",
+    # )
+    # info_offers_already_purchased: Optional[List["InfoOffer"]] = Field(
+    #     sa_column=Column(JSON, index=True),
+    #     default=None,
+    #     description="Info offers already purchased in this decision context",
+    # )
+    buyer_id: int = Field(foreign_key="human_buyer.user_id", index=True)
+    max_budget: float = Field(default=0.0, index=True)
+    seller_ids: Optional[List[int]] = Field(
+        sa_column=Column(JSON, index=True),
+        default=None,
+        description="Direct query to specific sellers only",
+    )
+    priority: int = Field(default=0, le=1, ge=0, index=True)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+
+    # Relationships
+    buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
+    parent:  Optional[DecisionContext]      = Relationship(
+        back_populates="children",
+        sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
+    )
+    children: List[DecisionContext]         = Relationship(back_populates="parent")
+
+class InfoOffer(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    seller_id: int = Field(foreign_key="human_seller.id", index=True)
+    private_info: str = Field(
+        sa_column=Column(String, nullable=False),
+        description="Private information about the offer, not visible except during inspection and after purchase",
+    )
+    public_info: Optional[str] = Field(
+        sa_column=Column(String, nullable=True),
+        description="Public information about the offer, retrievable via public API",
+    )
+    price: float = Field(default=0.0, index=True)
+
+    # Relationships
+    seller: HumanSeller = Relationship(back_populates="info_offers")
+    decision_contexts_inspecting: List[DecisionContext] = Relationship(
+        back_populates="info_offers_being_inspected",
+        link_model=DecisionContextInfoOfferLink,
+    )
+    decision_contexts_where_purchased: List[DecisionContext] = Relationship(
+        back_populates="info_offers_already_purchased",
+        link_model=DecisionContextInfoOfferLink,
+    )
