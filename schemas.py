@@ -32,8 +32,8 @@ class HumanBuyerRead(SQLModel):
         orm_mode = True
 
 class HumanBuyerCreate(SQLModel):
-    default_child_llm:  LLMBuyerType
-    default_max_budget: float
+    default_child_llm:  LLMBuyerType = LLMBuyerType()
+    default_max_budget: float = 0.0
 
 class HumanBuyerUpdate(SQLModel):
     default_child_llm:    Optional[LLMBuyerType] = None
@@ -57,7 +57,6 @@ class SellerMatcherRead(SQLModel):
         orm_mode = True
 
 class SellerMatcherCreate(SQLModel):
-    seller_id:          int
     keywords:           Optional[List[str]] = None
     context_pages:      Optional[List[str]] = None
     min_max_budget:     float
@@ -89,6 +88,8 @@ class SellerRead(SQLModel):
     class Config:
         orm_mode = True
 
+# none of these need models -- seller accounts can be created without any info, and then matchers can be added later
+
 # class SellerCreate(SQLModel):
 #     # type: str # this will automatically be set depending on the endpoint used
 #     matchers: List[SellerMatcherCreate]
@@ -99,4 +100,18 @@ class SellerRead(SQLModel):
 
 class HumanSellerRead(SellerRead):
     user_id: int
+
+# class HumanSellerCreate(SellerCreate):
+#     pass
+
+# class HumanSellerUpdate(SellerUpdate):
+#     pass
+
+# private to creating seller only!
+class BotSellerRead(SellerRead):
+    id: int
+    user_id: int
+    info: Optional[str]
+    llm_model: Optional[str]
+    llm_prompt: Optional[str]
 

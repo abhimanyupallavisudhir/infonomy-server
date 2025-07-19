@@ -1,11 +1,11 @@
 from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, JSON, Computed, Float, String, case
+from sqlalchemy import Column, JSON, Computed, Float, String, case, CheckConstraint
 
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
 from typing import Optional, List
-from pydantic import ConfigDict, BaseModel
+from pydantic import ConfigDict, BaseModel, model_validator
 import datetime
 
 class User(SQLModelBaseUserDB, table=True):
@@ -27,6 +27,7 @@ class User(SQLModelBaseUserDB, table=True):
     seller_profile: Optional["HumanSeller"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"uselist": False}
     )
+    bot_sellers: List["BotSeller"] = Relationship(back_populates="user")
 
 
 class LLMBuyerType(BaseModel):
@@ -126,6 +127,7 @@ class HumanBuyer(SQLModel, table=True):
 
     # Relationships
     user: User = Relationship(back_populates="buyer_profile")
+    decision_contexts: List["DecisionContext"] = Relationship(back_populates="buyer")
 
 
 # class LLMBuyer(Buyer, table=True):
@@ -144,7 +146,7 @@ class Seller(SQLModel, table=True):
     type: str = Field(
         sa_column=Column(String, nullable=False),
         index=True,
-        description="Type of seller ('human_seller' or 'llm_seller')",
+        description="Type of seller ('human_seller' or 'bot_seller')",
     )
 
     # polymorphic config
@@ -155,6 +157,7 @@ class Seller(SQLModel, table=True):
 
     # Relationships
     matchers: List["SellerMatcher"] = Relationship(back_populates="seller")
+    info_offers: List["InfoOffer"] = Relationship(back_populates="seller")
 
 
 class HumanSeller(Seller, table=True):
@@ -170,6 +173,51 @@ class HumanSeller(Seller, table=True):
     # Relationships
     user: User = Relationship(back_populates="seller_profile")
 
+class BotSeller(Seller, table=True):
+    __tablename__ = "bot_seller"
+    __table_args__ = (
+        CheckConstraint(
+            "info IS NOT NULL OR (llm_model IS NOT NULL AND llm_prompt IS NOT NULL)",
+            name="ck_bot_seller_info_or_llm"
+        ),
+    )
+    id: int = Field(foreign_key="seller.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "bot_seller",
+    }
+
+    info: Optional[str] = Field(
+        sa_column=Column(String, nullable=True),
+        description="For bots that just regurgitate a piece of info"
+    )
+
+    llm_model: Optional[str] = Field(
+        sa_column=Column(String, nullable=True),
+        description="For bots that use an LLM to generate responses"
+    )
+    llm_prompt: Optional[str] = Field(
+        sa_column=Column(String, nullable=True),
+        description="For bots that use an LLM to generate responses"
+    )
+
+    # Relationships
+    user: User = Relationship(back_populates="bot_sellers")
+
+    # ensure Pydantic actually runs validators on assignment + init
+    model_config = ConfigDict(validate_default=True, validate_assignment=True)
+
+    @model_validator(mode="before")
+    def check_info_or_llm(cls, values: dict):
+        info = values.get("info")
+        model = values.get("llm_model")
+        prompt = values.get("llm_prompt")
+        if info is None and not (model and prompt):
+            raise ValueError(
+                "Must set either `info` or both `llm_model` and `llm_prompt`."
+            )
+        return values
 
 class SellerMatcher(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -272,6 +320,7 @@ class InfoOffer(SQLModel, table=True):
         description="Public information about the offer, retrievable via public API",
     )
     price: float = Field(default=0.0, index=True)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     # Relationships
     seller: HumanSeller = Relationship(back_populates="info_offers")
