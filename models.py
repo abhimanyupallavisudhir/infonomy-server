@@ -96,34 +96,49 @@ class HumanBuyer(SQLModel, table=True):
         sa_column=Column(JSON, nullable=False),
         description="Number of queries where a purchase was made by the buyer, by priority",
     )
-    inspection_rate: dict[int, float] = Field(
-        sa_column=Column(
-            Float,
-            Computed(
-                case(
-                    (Column("num_queries") == 0, 0.0),
-                    else_=Column("num_inspected") / Column("num_queries"),
-                )
-            ),
-            nullable=False,
-            default=0.0,
-        ),
-        description="Inspection rate for queries of each priority",
-    )
-    purchase_rate: dict[int, float] = Field(
-        sa_column=Column(
-            Float,
-            Computed(
-                case(
-                    (Column("num_queries") == 0, 0.0),
-                    else_=Column("num_purchased") / Column("num_queries"),
-                )
-            ),
-            nullable=False,
-            default=0.0,
-        ),
-        description="Purchase rate for queries of each priority",
-    )
+    @property
+    def inspection_rate(self) -> dict[int, float]:
+        rates: dict[int, float] = {}
+        for prio, qcount in self.num_queries.items():
+            inspected = self.num_inspected.get(prio, 0)
+            rates[prio] = inspected / qcount if qcount else 0.0
+        return rates
+
+    @property
+    def purchase_rate(self) -> dict[int, float]:
+        rates: dict[int, float] = {}
+        for prio, qcount in self.num_queries.items():
+            purchased = self.num_purchased.get(prio, 0)
+            rates[prio] = purchased / qcount if qcount else 0.0
+        return rates
+    # inspection_rate: dict[int, float] = Field(
+    #     sa_column=Column(
+    #         Float,
+    #         Computed(
+    #             case(
+    #                 (Column("num_queries") == 0, 0.0),
+    #                 else_=Column("num_inspected") / Column("num_queries"),
+    #             )
+    #         ),
+    #         nullable=False,
+    #         default=0.0,
+    #     ),
+    #     description="Inspection rate for queries of each priority",
+    # )
+    # purchase_rate: dict[int, float] = Field(
+    #     sa_column=Column(
+    #         Float,
+    #         Computed(
+    #             case(
+    #                 (Column("num_queries") == 0, 0.0),
+    #                 else_=Column("num_purchased") / Column("num_queries"),
+    #             )
+    #         ),
+    #         nullable=False,
+    #         default=0.0,
+    #     ),
+    #     description="Purchase rate for queries of each priority",
+    # )
 
     # Relationships
     user: User = Relationship(back_populates="buyer_profile")
@@ -142,7 +157,7 @@ class HumanBuyer(SQLModel, table=True):
 
 class Seller(SQLModel, table=True):
     __tablename__ = "seller"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int = Field(primary_key=True)
     type: str = Field(
         sa_column=Column(String, nullable=False),
         index=True,
@@ -220,7 +235,7 @@ class BotSeller(Seller, table=True):
         return values
 
 class SellerMatcher(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int = Field(primary_key=True)
     seller_id: int = Field(foreign_key="seller.user_id", index=True)
     keywords: Optional[List[str]] = Field(
         sa_column=Column(JSON, index=True), default=None, description="Keywords to look out for: None to get everything"
@@ -253,27 +268,18 @@ class SellerMatcher(SQLModel, table=True):
     # Relationships
     seller: Seller = Relationship(back_populates="matchers")
 
-class DecisionContextInfoOfferLink(SQLModel, table=True):
-    context_id:   int = Field(foreign_key="decisioncontext.id", primary_key=True)
-    info_offer_id:int = Field(foreign_key="infooffer.id",       primary_key=True)
-
-
 class DecisionContext(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    query: str = Field(index=True)
-    context_pages: List[str] = Field(sa_column=Column(JSON, index=True), default_factory=list)
+    id: int = Field(primary_key=True)
+    query: Optional[str] = Field(index=True, default=None, description="Custom query for information")
+    context_pages: Optional[List[str]] = Field(sa_column=Column(JSON, index=True), default=None, description="Context pages, e.g. https://metaculus.com/...")
 
     # for recursive decision contexts
     parent_id: Optional[int] = Field(default=None, foreign_key="decisioncontext.id", index=True)
-    info_offers_being_inspected: List["InfoOffer"] = Relationship(
-        back_populates="contexts_being_inspected",
-        link_model=DecisionContextInfoOfferLink,
+    parent:  Optional[DecisionContext]      = Relationship(
+        back_populates="children",
+        sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
     )
-
-    info_offers_already_purchased: List["InfoOffer"] = Relationship(
-        back_populates="contexts_already_purchased",
-        link_model=DecisionContextInfoOfferLink,
-    )
+    children: List[DecisionContext]         = Relationship(back_populates="parent")
 
     # history: Optional[List["DecisionContext"]] = Field(
     #     sa_column=Column(JSON, index=True),
@@ -302,15 +308,25 @@ class DecisionContext(SQLModel, table=True):
 
     # Relationships
     buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
-    parent:  Optional[DecisionContext]      = Relationship(
-        back_populates="children",
-        sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
-    )
-    children: List[DecisionContext]         = Relationship(back_populates="parent")
+    info_offers: List["InfoOffer"] = Relationship(back_populates="context")
+
+    @property
+    def info_offers_being_inspected(self) -> list["InfoOffer"]:
+        return [offer for offer in self.info_offers if offer.currently_being_inspected]
+    
+    @property
+    def info_offers_already_inspected(self) -> list["InfoOffer"]:
+        return [offer for offer in self.info_offers if offer.inspected]
+
+    @property
+    def info_offers_already_purchased(self) -> list["InfoOffer"]:
+        return [offer for offer in self.info_offers if offer.purchased]
+
 
 class InfoOffer(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     seller_id: int = Field(foreign_key="human_seller.id", index=True)
+    context_id: int = Field(foreign_key="decisioncontext.id", index=True)
     private_info: str = Field(
         sa_column=Column(String, nullable=False),
         description="Private information about the offer, not visible except during inspection and after purchase",
@@ -321,14 +337,19 @@ class InfoOffer(SQLModel, table=True):
     )
     price: float = Field(default=0.0, index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+    currently_being_inspected: bool = Field(
+        default=False,
+        description="Whether the info offer is currently being inspected by a buyer",
+    )
+    inspected: bool = Field(
+        default=False,
+        description="Whether the info offer has been inspected by a buyer",
+    )
+    purchased: bool = Field(
+        default=False,
+        description="Whether the info offer has been purchased by a buyer",
+    )
 
     # Relationships
     seller: HumanSeller = Relationship(back_populates="info_offers")
-    decision_contexts_inspecting: List[DecisionContext] = Relationship(
-        back_populates="info_offers_being_inspected",
-        link_model=DecisionContextInfoOfferLink,
-    )
-    decision_contexts_where_purchased: List[DecisionContext] = Relationship(
-        back_populates="info_offers_already_purchased",
-        link_model=DecisionContextInfoOfferLink,
-    )
+    context: DecisionContext = Relationship(back_populates="info_offers")

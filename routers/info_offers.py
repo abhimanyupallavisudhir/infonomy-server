@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlmodel import Session, select
 from database import get_db
-from models import User, Answer, Question
+from models import User, 
 from schemas import AnswerCreate, AnswerResponse
 from auth import current_active_user
 

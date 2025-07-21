@@ -115,3 +115,81 @@ class BotSellerRead(SellerRead):
     llm_model: Optional[str]
     llm_prompt: Optional[str]
 
+
+# subclass SQLModel because we don't have a SellerCreate or SellerUpdate model
+class BotSellerCreate(SQLModel):
+    info: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_prompt: Optional[str] = None
+
+class BotSellerUpdate(SQLModel):
+    info: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_prompt: Optional[str] = None
+
+class DecisionContextRead(SQLModel):
+    id: int
+    query: Optional[str]
+    context_pages: Optional[List[str]]
+    buyer_id: int
+    max_budget: float
+    seller_ids: Optional[List[int]]
+    priority: int
+    created_at: datetime
+    # for recursive
+    children: Optional[List["DecisionContextRead"]]
+    parent: Optional["DecisionContextRead"]
+    info_offers_being_inspected: Optional[List["InfoOfferReadPrivate"]]
+    info_offers_already_purchased: Optional[List["InfoOfferReadPrivate"]]
+
+    class Config:
+        orm_mode = True
+
+class DecisionContextCreateNonRecursive(SQLModel):
+    query: Optional[str] = None
+    context_pages: Optional[List[str]] = None
+    max_budget: float
+    seller_ids: Optional[List[int]] = None
+    priority: int = 0
+
+class DecisionContextCreateRecursive(DecisionContextCreateNonRecursive):
+    parent_id: Optional[int] = None
+    info_offers_being_inspected: Optional[List[int]] = None
+    info_offers_already_purchased: Optional[List[int]] = None
+
+class DecisionContextUpdateNonRecursive(SQLModel):
+    query: Optional[str] = None
+    context_pages: Optional[List[str]] = None
+    max_budget: Optional[float] = None
+    seller_ids: Optional[List[int]] = None
+    priority: Optional[int] = None
+
+class DecisionContextUpdateRecursive(DecisionContextUpdateNonRecursive):
+    parent_id: Optional[int] = None
+    info_offers_being_inspected: Optional[List[int]] = None
+    info_offers_already_purchased: Optional[List[int]] = None
+
+class InfoOfferReadPublic(SQLModel):
+    id: int
+    seller_id: int
+    public_info: Optional[str]
+    price: float
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class InfoOfferReadPrivate(InfoOfferReadPublic):
+    private_info: str
+    
+class InfoOfferCreate(SQLModel):
+    private_info: str
+    public_info: Optional[str] = None
+    price: float = 0.0
+
+class InfoOfferUpdate(SQLModel):
+    private_info: Optional[str] = None
+    public_info: Optional[str] = None
+    price: Optional[float] = None
+
+DecisionContextRead.update_forward_refs()
