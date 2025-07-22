@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
 from database import get_db
-from models import User, HumanBuyer, DecisionContext, InfoOffer, SellerMatcher
+from models import User, HumanBuyer, DecisionContext, InfoOffer, SellerMatcher, Seller, HumanSeller, BotSeller, MatcherInbox
 from schemas import (
     UserRead,
     DecisionContextCreateNonRecursive,
@@ -35,43 +35,146 @@ def create_human_buyer(
     db.refresh(db_human_buyer)
     return db_human_buyer
 
+def get_context_for_buyer(
+    context_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserRead = Depends(current_active_user),
+) -> DecisionContext:
+    """
+    Dependency that loads a DecisionContext, 404s if missing,
+    403s if the current user doesn’t own it.
+    """
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Decision context not found")
+    if ctx.buyer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    return ctx
 
-@router.post("/questions", response_model=DecisionContextCreateNonRecursive)
+def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
+    """
+    Delete any existing inbox items for this context,
+    re‑run the matcher logic, and insert fresh MatcherInbox rows.
+    """
+    # 1) clear old items
+    db.query(MatcherInbox).filter(
+        MatcherInbox.decision_context_id == ctx.id
+    ).delete()
+    db.commit()
+
+    # 2) find candidate matchers by numeric filters
+    stmt = (
+        select(SellerMatcher)
+        .where(ctx.max_budget >= SellerMatcher.min_max_budget)
+        .where(ctx.priority   >= SellerMatcher.min_priority)
+    )
+    all_matchers: List[SellerMatcher] = db.exec(stmt).all()
+
+    # 3) full Python matching (rates, keywords, contexts, buyer_type)
+    buyer: HumanBuyer = ctx.buyer
+    new_items: List[MatcherInbox] = []
+    for m in all_matchers:
+        # buyer_type
+        if m.buyer_type and m.buyer_type != "human_buyer":
+            continue
+
+        # rates
+        irate = buyer.inspection_rate.get(ctx.priority, 0.0)
+        prate = buyer.purchase_rate.get(ctx.priority,   0.0)
+        if irate < m.min_inspection_rate or prate < m.min_purchase_rate:
+            continue
+
+        # keywords
+        if m.keywords is not None:
+            text = (ctx.query or "").lower()
+            if not any(kw.lower() in text for kw in m.keywords):
+                continue
+
+        # contexts
+        if m.context_pages is not None:
+            pages = ctx.context_pages or []
+            if not any(p in pages for p in m.context_pages):
+                continue
+        now = datetime.utcnow()
+        new_items.append(
+            MatcherInbox(
+                matcher_id=m.id,
+                decision_context_id=ctx.id,
+                status="new",
+                created_at=now,
+                expires_at=now + timedelta(seconds=m.age_limit)
+
+            )
+        )
+
+    # 4) bulk‐insert fresh inbox items
+    if new_items:
+        db.add_all(new_items)
+        db.commit()
+
+@router.post(
+    "/questions",
+    response_model=DecisionContextRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_decision_context(
     decision_context: DecisionContextCreateNonRecursive,
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
+    current_user: UserRead = Depends(current_active_user),
 ):
-    db_decision_context = DecisionContext(
-        **decision_context.dict(), buyer_id=current_user.id
+    if current_user.buyer_profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not have a buyer profile",
+        )
+    ctx = DecisionContext(
+        **decision_context.dict(),
+        buyer_id=current_user.id,
+        created_at=datetime.utcnow(),
     )
-    db.add(db_decision_context)
+    db.add(ctx)
     db.commit()
-    db.refresh(db_decision_context)
-    return db_decision_context
+    db.refresh(ctx)
+
+    # populate inbox for this new context
+    recompute_inbox_for_context(ctx, db)
+    return ctx
 
 
 @router.patch(
-    "/questions/{context_id}", response_model=DecisionContextUpdateNonRecursive
+    "/questions/{context_id}",
+    response_model=DecisionContextRead,
 )
 def update_decision_context(
-    context_id: int,
-    decision_context: DecisionContextUpdateNonRecursive,
+    context_updates: DecisionContextUpdateNonRecursive,
+    db_context: DecisionContext = Depends(get_context_for_buyer),
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
 ):
-    db_context = db.get(DecisionContext, context_id)
-    if not db_context:
-        raise HTTPException(status_code=404, detail="Decision context not found")
+    # apply only the fields the client sent
+    for k, v in context_updates.dict(exclude_unset=True).items():
+        setattr(db_context, k, v)
+    db.add(db_context); db.commit(); db.refresh(db_context)
 
-    for key, value in decision_context.dict(exclude_unset=True).items():
-        setattr(db_context, key, value)
-
-    db.add(db_context)
-    db.commit()
-    db.refresh(db_context)
+    # re‐sync the inbox: matchers may have gained/lost this context
+    recompute_inbox_for_context(db_context, db)
     return db_context
 
+
+@router.delete(
+    "/questions/{context_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_decision_context(
+    db_context: DecisionContext = Depends(get_context_for_buyer),
+    db: Session = Depends(get_db),
+):
+    # clear out any inbox items first
+    db.query(MatcherInbox).filter(
+        MatcherInbox.decision_context_id == db_context.id
+    ).delete()
+    # then delete the context itself
+    db.delete(db_context)
+    db.commit()
 
 @router.get("/questions/{context_id}", response_model=DecisionContextRead)
 def read_decision_context(
@@ -86,144 +189,111 @@ def read_decision_context(
 
 
 @router.get(
-    "/matchers/{matcher_id}/questions_for",
+    "/matchers/{matcher_id}/inbox",
     response_model=List[DecisionContextRead],
-    status_code=status.HTTP_200_OK,
 )
 def read_decision_contexts_for_matcher(
     matcher_id: int,
     db: Session = Depends(get_db),
     current_user: UserRead = Depends(current_active_user),
 ):
-    # 1) Load and authorize
+    # authorize…
     matcher = db.get(SellerMatcher, matcher_id)
-    if not matcher:
-        raise HTTPException(status_code=404, detail="Matcher not found")
-    # ensure this matcher belongs to the logged‑in seller
-    if matcher.seller.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not allowed to view this matcher")
+    if not matcher or matcher.seller.user_id != current_user.id:
+        raise HTTPException(status_code=404)
 
-    # 2) Base SQL filters: budget, priority, age
+    # fetch all unread contexts
     stmt = (
         select(DecisionContext)
-        .where(DecisionContext.max_budget >= matcher.min_max_budget)
-        .where(DecisionContext.priority >= matcher.min_priority)
+        .join(MatcherInbox, MatcherInbox.decision_context_id == DecisionContext.id)
+        .where(MatcherInbox.matcher_id == matcher_id)
+        .where(MatcherInbox.status == "new")
+        .where(MatcherInbox.expires_at >= datetime.utcnow())
     )
-    if matcher.age_limit is not None:
-        cutoff = datetime.utcnow() - timedelta(seconds=matcher.age_limit)
-        stmt = stmt.where(DecisionContext.created_at >= cutoff)
+    return db.exec(stmt).all()
 
-    candidates = db.exec(stmt).all()
-
-    # 3) In‑Python filters for JSON/text criteria
-    matches: List[DecisionContext] = []
-    for ctx in candidates:
-        # — buyer_type (only human buyers exist today) —
-        if matcher.buyer_type and matcher.buyer_type != "human_buyer":
-            continue
-
-        # — keywords in prompt —
-        if matcher.keywords is not None:
-            prompt = (ctx.query or "").lower()
-            if not any(kw.lower() in prompt for kw in matcher.keywords):
-                continue
-
-        # — context_pages overlap —
-        if matcher.context_pages is not None:
-            pages = ctx.context_pages or []
-            if not set(matcher.context_pages).intersection(pages):
-                continue
-
-        # (skip the LLM‐model / system‐prompt criteria here unless you
-        #  add those fields to DecisionContext)
-
-        matches.append(ctx)
-
-    return matches
-
-# PostgreSQL 
-# from sqlalchemy import or_, and_, func
-# @router.get(
-#     "/matchers/{matcher_id}/questions_for",
-#     response_model=List[DecisionContextRead],
-# )
-# def read_decision_contexts_for_matcher(
-#     matcher_id: int,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(current_active_user),
-# ):
-#     matcher = db.get(SellerMatcher, matcher_id)
-#     if not matcher or matcher.seller.user_id != current_user.id:
-#         raise HTTPException(403)
-
-#     # Build the base stmt with your numeric/date filters:
-#     stmt = (
-#         select(DecisionContext)
-#         .where(DecisionContext.max_budget >= matcher.min_max_budget)
-#         .where(DecisionContext.priority >= matcher.min_priority)
-#     )
-#     if matcher.age_limit is not None:
-#         cutoff = datetime.utcnow() - timedelta(seconds=matcher.age_limit)
-#         stmt = stmt.where(DecisionContext.created_at >= cutoff)
-
-#     # 1) KEYWORD MATCH: require any of the keywords appear
-#     if matcher.keywords:
-#         # Postgres full‑text:
-#         ts_query = " & ".join(func.plainto_tsquery("english", kw) for kw in matcher.keywords)
-#         stmt = stmt.where(
-#             func.to_tsvector("english", DecisionContext.query).op("@@")(func.to_tsquery("english", ts_query))
-#         )
-#         # └—or for simple ILIKE:
-#         # stmt = stmt.where(
-#         #     or_(*[DecisionContext.query.ilike(f"%{kw}%") for kw in matcher.keywords])
-#         # )
-#     # 2) CONTEXT_PAGES ARRAY OVERLAP
-#     if matcher.context_pages:
-#         # if using Postgres ARRAY:
-#         # stmt = stmt.where(DecisionContext.context_pages.overlap(matcher.context_pages))
-#         # if stored as JSONB array:
-#         stmt = stmt.where(
-#             DecisionContext.context_pages.cast("jsonb").op("?|")(matcher.context_pages)
-#         )
-
-#     # 3) (Other JSONB list fields you can treat similarly…)
-#     # e.g. buyer_llm_model overlap etc.
-
-#     results = db.exec(stmt).all()
-#     return results
-
-
-@router.get("/buyers/me/questions", response_model=list[DecisionContextRead])
-def read_decision_contexts_for_user(
+@router.get(
+    "/sellers/{seller_id}/inbox",
+    response_model=List[DecisionContextRead],
+    status_code=status.HTTP_200_OK,
+)
+def read_decision_contexts_for_seller(
+    seller_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
+    current_user: UserRead = Depends(current_active_user),
 ):
-    db_contexts = db.exec(
-        select(DecisionContext).where(
-            DecisionContext.buyer_id == current_user.id
-            and DecisionContext.parent_id is None
+    # 1) Load the seller (must be a HumanSeller)
+    seller = db.get(Seller, seller_id)
+    if not seller or not isinstance(seller, HumanSeller):
+        raise HTTPException(status_code=404, detail="Seller not found")
+    if seller.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not allowed to view this seller’s inbox"
         )
-    ).all()
-    return db_contexts
+
+    # 2) Collect all matcher IDs for this seller
+    matcher_ids = [m.id for m in seller.matchers]
+    if not matcher_ids:
+        return []
+
+    # 3) Fetch all NEW DecisionContexts via the inbox table
+    stmt = (
+        select(DecisionContext)
+        .join(MatcherInbox, MatcherInbox.decision_context_id == DecisionContext.id)
+        .where(MatcherInbox.matcher_id.in_(matcher_ids))
+        .where(MatcherInbox.status == "new")
+    )
+    results = db.exec(stmt).all()
+    return results
 
 
-@router.post("/questions/{context_id}/answers", response_model=InfoOfferReadPrivate)
+
+@router.post(
+    "/questions/{context_id}/answers",
+    response_model=InfoOfferReadPrivate,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_info_offer(
     context_id: int,
     info_offer: InfoOfferCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
+    current_user: UserRead = Depends(current_active_user),
 ):
-    db_context = db.get(DecisionContext, context_id)
-    if not db_context:
+    # 1) Ensure the context exists
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
         raise HTTPException(status_code=404, detail="Decision context not found")
-    db_info_offer = InfoOffer(
-        **info_offer.dict(exclude_unset=True), context_id=context_id
+
+    # 2) Ensure the user is a seller with a profile
+    human_seller = current_user.seller_profile
+    if not human_seller:
+        raise HTTPException(status_code=400, detail="User is not a seller")
+
+    # 3) Create the InfoOffer
+    offer = InfoOffer(
+        **info_offer.dict(exclude_unset=True),
+        context_id=context_id,
+        seller_id=human_seller.user_id,
+        created_at=datetime.utcnow(),
     )
-    db.add(db_info_offer)
+    db.add(offer)
     db.commit()
-    db.refresh(db_info_offer)
-    return db_info_offer
+    db.refresh(offer)
+
+    # 4) Mark any matching inbox items as “responded”
+    matcher_ids = [m.id for m in human_seller.matchers]
+    inbox_items = db.exec(
+        select(MatcherInbox)
+        .where(MatcherInbox.decision_context_id == context_id)
+        .where(MatcherInbox.matcher_id.in_(matcher_ids))
+    ).all()
+    for item in inbox_items:
+        item.status = "responded"
+        db.add(item)
+    db.commit()
+
+    return offer
 
 
 @router.patch(
@@ -235,20 +305,77 @@ def update_info_offer(
     info_offer_id: int,
     info_offer: InfoOfferUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
+    current_user: UserRead = Depends(current_active_user),
 ):
-    db_info_offer = db.get(InfoOffer, info_offer_id)
-    if not db_info_offer:
+    # 1) Load the offer
+    offer = db.get(InfoOffer, info_offer_id)
+    if not offer:
         raise HTTPException(status_code=404, detail="Info offer not found")
 
-    for key, value in info_offer.dict(exclude_unset=True).items():
-        setattr(db_info_offer, key, value)
+    # 2) Authorize
+    human_seller = current_user.seller_profile
+    if not human_seller or offer.seller_id != human_seller.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to update this info offer")
 
-    db.add(db_info_offer)
+    # 3) Apply updates
+    for k, v in info_offer.dict(exclude_unset=True).items():
+        setattr(offer, k, v)
+    db.add(offer)
     db.commit()
-    db.refresh(db_info_offer)
-    return db_info_offer
+    db.refresh(offer)
 
+    # 4) Ensure the inbox remains “responded”
+    matcher_ids = [m.id for m in human_seller.matchers]
+    inbox_items = db.exec(
+        select(MatcherInbox)
+        .where(MatcherInbox.decision_context_id == context_id)
+        .where(MatcherInbox.matcher_id.in_(matcher_ids))
+    ).all()
+    for item in inbox_items:
+        item.status = "responded"
+        db.add(item)
+    db.commit()
+
+    return offer
+
+
+@router.delete(
+    "/questions/{context_id}/answers/{info_offer_id}",
+    response_model=InfoOfferReadPrivate,
+)
+def delete_info_offer(
+    context_id: int,
+    info_offer_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserRead = Depends(current_active_user),
+):
+    # 1) Load the offer
+    offer = db.get(InfoOffer, info_offer_id)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Info offer not found")
+
+    # 2) Authorize
+    human_seller = current_user.seller_profile
+    if not human_seller or offer.seller_id != human_seller.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to delete this info offer")
+
+    # 3) Delete it
+    db.delete(offer)
+    db.commit()
+
+    # 4) Mark the context back to “new” in the inbox so the seller can reconsider
+    matcher_ids = [m.id for m in human_seller.matchers]
+    inbox_items = db.exec(
+        select(MatcherInbox)
+        .where(MatcherInbox.decision_context_id == context_id)
+        .where(MatcherInbox.matcher_id.in_(matcher_ids))
+    ).all()
+    for item in inbox_items:
+        item.status = "new"
+        db.add(item)
+    db.commit()
+
+    return offer
 
 @router.get(
     "/questions/{context_id}/answers/{info_offer_id}",
@@ -289,3 +416,4 @@ def read_info_offers_for_decision_context(
         select(InfoOffer).where(InfoOffer.context_id == context_id)
     ).all()
     return db_info_offers
+

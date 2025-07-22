@@ -1,10 +1,10 @@
 from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, JSON, Computed, Float, String, case, CheckConstraint
+from sqlalchemy import Column, JSON, String, CheckConstraint #, Computed, Float, case
 
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import ConfigDict, BaseModel, model_validator
 import datetime
 
@@ -267,6 +267,7 @@ class SellerMatcher(SQLModel, table=True):
 
     # Relationships
     seller: Seller = Relationship(back_populates="matchers")
+    inbox_items: List["MatcherInbox"] = Relationship(back_populates="matcher", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
 class DecisionContext(SQLModel, table=True):
     id: int = Field(primary_key=True)
@@ -353,3 +354,19 @@ class InfoOffer(SQLModel, table=True):
     # Relationships
     seller: HumanSeller = Relationship(back_populates="info_offers")
     context: DecisionContext = Relationship(back_populates="info_offers")
+
+class MatcherInbox(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    matcher_id: int = Field(foreign_key="sellermatcher.id", index=True)
+    decision_context_id: int = Field(foreign_key="decisioncontext.id", index=True)
+    status: Literal["new", "ignored", "responded"] = Field(
+        default="new",
+        description="Status of the inbox item",
+        index=True,
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    expires_at: datetime = Field(index=True)
+
+    # Relationships
+    matcher: SellerMatcher = Relationship(back_populates="inbox_items")
+    decision_context: DecisionContext = Relationship()
