@@ -36,6 +36,8 @@ class LLMBuyerType(BaseModel):
     description: Optional[str] = "basic GPT-4o LLM buyer"
     querier_model: str = "openrouter/openai/chatgpt-4o-latest"
     querier_system_prompt: str = "You are a helpful assistant."
+    chooser_model: str = "openrouter/openai/chatgpt-4o-latest"
+    chooser_system_prompt: str = "You are a helpful assistant."
     decider_model: str = "openrouter/openai/chatgpt-4o-latest"
     decider_system_prompt: str = "You are a helpful assistant."
     max_budget: float = 50.0

@@ -1,7 +1,7 @@
 import requests
 from sqlmodel import Session, select
 from models import User, Question, Answer
-user_data={"username": "dimension10009", "email": "abhimanyupss@gmail.com", "password": "ooga-boogass"}
+user_data={"username": "dimension10009", "email": "abhimanyupss@gmail.com", "password": "blingblong"}
 question_data = {"title": "What is the meaning of life?", "content": "I want to know the meaning of life."}
 answer_data = {"content": "The meaning of life is subjective and can vary from person to person.", "question_id": 1}
 answer_data_2 = {"content": "The meaning of life is objective and I will eat every person.", "question_id": 1}

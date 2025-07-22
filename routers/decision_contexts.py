@@ -1,9 +1,19 @@
 from typing import Union, List
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, Query, status
 from sqlmodel import Session, select
 from database import get_db
-from models import User, HumanBuyer, DecisionContext, InfoOffer, SellerMatcher, Seller, HumanSeller, BotSeller, MatcherInbox
+from models import (
+    User,
+    HumanBuyer,
+    DecisionContext,
+    InfoOffer,
+    SellerMatcher,
+    Seller,
+    HumanSeller,
+    BotSeller,
+    MatcherInbox,
+)
 from schemas import (
     UserRead,
     DecisionContextCreateNonRecursive,
@@ -13,6 +23,7 @@ from schemas import (
     DecisionContextCreateRecursive,
     HumanBuyerRead,
     HumanBuyerCreate,
+    HumanBuyerUpdate,
     InfoOfferReadPrivate,
     InfoOfferReadPublic,
     InfoOfferCreate,
@@ -35,10 +46,62 @@ def create_human_buyer(
     db.refresh(db_human_buyer)
     return db_human_buyer
 
+
+@router.get("/buyers/me", response_model=HumanBuyerRead)
+def read_current_human_buyer(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    db_human_buyer = db.exec(
+        select(HumanBuyer).where(HumanBuyer.user_id == current_user.id)
+    ).first()
+    if not db_human_buyer:
+        raise HTTPException(status_code=404, detail="Human buyer profile not found")
+    return db_human_buyer
+
+
+@router.update("/buyers/me", response_model=HumanBuyerRead)
+def update_current_human_buyer(
+    human_buyer_updates: HumanBuyerUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    db_human_buyer = db.exec(
+        select(HumanBuyer).where(HumanBuyer.user_id == current_user.id)
+    ).first()
+    if not db_human_buyer:
+        raise HTTPException(status_code=404, detail="Human buyer profile not found")
+    for k, v in human_buyer_updates.dict(exclude_unset=True).items():
+        setattr(db_human_buyer, k, v)
+    db.add(db_human_buyer)
+    db.commit()
+    db.refresh(db_human_buyer)
+    return db_human_buyer
+
+
+@router.post("/sellers", response_model=HumanSeller)
+def create_human_seller(
+    db: Session = Depends(get_db), current_user: User = Depends(current_active_user)
+):
+    # Ensure the user does not already have a seller profile
+    existing_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+    ).first()
+    if existing_seller:
+        raise HTTPException(status_code=400, detail="User already has a seller profile")
+
+    # Create the new HumanSeller profile
+    human_seller = HumanSeller(user_id=current_user.id)
+    db.add(human_seller)
+    db.commit()
+    db.refresh(human_seller)
+    return human_seller
+
+
 def get_context_for_buyer(
     context_id: int,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ) -> DecisionContext:
     """
     Dependency that loads a DecisionContext, 404s if missing,
@@ -51,22 +114,21 @@ def get_context_for_buyer(
         raise HTTPException(status_code=403, detail="Not allowed")
     return ctx
 
+
 def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
     """
     Delete any existing inbox items for this context,
     re‑run the matcher logic, and insert fresh MatcherInbox rows.
     """
     # 1) clear old items
-    db.query(MatcherInbox).filter(
-        MatcherInbox.decision_context_id == ctx.id
-    ).delete()
+    db.query(MatcherInbox).filter(MatcherInbox.decision_context_id == ctx.id).delete()
     db.commit()
 
     # 2) find candidate matchers by numeric filters
     stmt = (
         select(SellerMatcher)
         .where(ctx.max_budget >= SellerMatcher.min_max_budget)
-        .where(ctx.priority   >= SellerMatcher.min_priority)
+        .where(ctx.priority >= SellerMatcher.min_priority)
     )
     all_matchers: List[SellerMatcher] = db.exec(stmt).all()
 
@@ -80,7 +142,7 @@ def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
 
         # rates
         irate = buyer.inspection_rate.get(ctx.priority, 0.0)
-        prate = buyer.purchase_rate.get(ctx.priority,   0.0)
+        prate = buyer.purchase_rate.get(ctx.priority, 0.0)
         if irate < m.min_inspection_rate or prate < m.min_purchase_rate:
             continue
 
@@ -102,8 +164,7 @@ def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
                 decision_context_id=ctx.id,
                 status="new",
                 created_at=now,
-                expires_at=now + timedelta(seconds=m.age_limit)
-
+                expires_at=now + timedelta(seconds=m.age_limit),
             )
         )
 
@@ -111,6 +172,7 @@ def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
     if new_items:
         db.add_all(new_items)
         db.commit()
+
 
 @router.post(
     "/questions",
@@ -120,7 +182,7 @@ def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
 def create_decision_context(
     decision_context: DecisionContextCreateNonRecursive,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ):
     if current_user.buyer_profile is None:
         raise HTTPException(
@@ -153,7 +215,9 @@ def update_decision_context(
     # apply only the fields the client sent
     for k, v in context_updates.dict(exclude_unset=True).items():
         setattr(db_context, k, v)
-    db.add(db_context); db.commit(); db.refresh(db_context)
+    db.add(db_context)
+    db.commit()
+    db.refresh(db_context)
 
     # re‐sync the inbox: matchers may have gained/lost this context
     recompute_inbox_for_context(db_context, db)
@@ -176,12 +240,14 @@ def delete_decision_context(
     db.delete(db_context)
     db.commit()
 
+
 @router.get("/questions/{context_id}", response_model=DecisionContextRead)
 def read_decision_context(
     context_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
+    # TODO: add check to make sure recursive contexts are only visible to bot sellers, follow-up sellers and buyers who have already purchased
     db_context = db.get(DecisionContext, context_id)
     if not db_context:
         raise HTTPException(status_code=404, detail="Decision context not found")
@@ -195,7 +261,7 @@ def read_decision_context(
 def read_decision_contexts_for_matcher(
     matcher_id: int,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ):
     # authorize…
     matcher = db.get(SellerMatcher, matcher_id)
@@ -212,6 +278,7 @@ def read_decision_contexts_for_matcher(
     )
     return db.exec(stmt).all()
 
+
 @router.get(
     "/sellers/{seller_id}/inbox",
     response_model=List[DecisionContextRead],
@@ -220,7 +287,7 @@ def read_decision_contexts_for_matcher(
 def read_decision_contexts_for_seller(
     seller_id: int,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ):
     # 1) Load the seller (must be a HumanSeller)
     seller = db.get(Seller, seller_id)
@@ -228,8 +295,7 @@ def read_decision_contexts_for_seller(
         raise HTTPException(status_code=404, detail="Seller not found")
     if seller.user_id != current_user.id:
         raise HTTPException(
-            status_code=403,
-            detail="Not allowed to view this seller’s inbox"
+            status_code=403, detail="Not allowed to view this seller’s inbox"
         )
 
     # 2) Collect all matcher IDs for this seller
@@ -248,7 +314,6 @@ def read_decision_contexts_for_seller(
     return results
 
 
-
 @router.post(
     "/questions/{context_id}/answers",
     response_model=InfoOfferReadPrivate,
@@ -258,7 +323,7 @@ def create_info_offer(
     context_id: int,
     info_offer: InfoOfferCreate,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ):
     # 1) Ensure the context exists
     ctx = db.get(DecisionContext, context_id)
@@ -305,7 +370,7 @@ def update_info_offer(
     info_offer_id: int,
     info_offer: InfoOfferUpdate,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ):
     # 1) Load the offer
     offer = db.get(InfoOffer, info_offer_id)
@@ -315,7 +380,9 @@ def update_info_offer(
     # 2) Authorize
     human_seller = current_user.seller_profile
     if not human_seller or offer.seller_id != human_seller.user_id:
-        raise HTTPException(status_code=403, detail="Not allowed to update this info offer")
+        raise HTTPException(
+            status_code=403, detail="Not allowed to update this info offer"
+        )
 
     # 3) Apply updates
     for k, v in info_offer.dict(exclude_unset=True).items():
@@ -347,7 +414,7 @@ def delete_info_offer(
     context_id: int,
     info_offer_id: int,
     db: Session = Depends(get_db),
-    current_user: UserRead = Depends(current_active_user),
+    current_user: User = Depends(current_active_user),
 ):
     # 1) Load the offer
     offer = db.get(InfoOffer, info_offer_id)
@@ -357,7 +424,9 @@ def delete_info_offer(
     # 2) Authorize
     human_seller = current_user.seller_profile
     if not human_seller or offer.seller_id != human_seller.user_id:
-        raise HTTPException(status_code=403, detail="Not allowed to delete this info offer")
+        raise HTTPException(
+            status_code=403, detail="Not allowed to delete this info offer"
+        )
 
     # 3) Delete it
     db.delete(offer)
@@ -377,6 +446,7 @@ def delete_info_offer(
 
     return offer
 
+
 @router.get(
     "/questions/{context_id}/answers/{info_offer_id}",
     response_model=Union[InfoOfferReadPrivate, InfoOfferReadPublic],
@@ -391,29 +461,113 @@ def read_info_offer(
     db_info_offer = db.get(InfoOffer, info_offer_id)
     if not db_info_offer:
         raise HTTPException(status_code=404, detail="Info offer not found")
-    make_public = db_info_offer.seller.user_id != current_user.id or (
+
+    is_seller = db_info_offer.seller.user_id == current_user.id
+    is_buyer_who_purchased = (
         db_info_offer.purchased and db_info_offer.context.buyer_id == current_user.id
     )
-    if not make_public:
+
+    if is_seller or is_buyer_who_purchased:
         return InfoOfferReadPrivate.from_orm(db_info_offer)
-    return InfoOfferReadPublic.from_orm(db_info_offer)
+    else:
+        return InfoOfferReadPublic.from_orm(db_info_offer)
 
 
 @router.get(
     "/questions/{context_id}/answers",
-    response_model=list[Union[InfoOfferReadPrivate, InfoOfferReadPublic]],
+    response_model=List[Union[InfoOfferReadPrivate, InfoOfferReadPublic]],
+    status_code=status.HTTP_200_OK,
 )
 def read_info_offers_for_decision_context(
     context_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
-    db_context = db.get(DecisionContext, context_id)
-    if not db_context:
+    # 1) Verify context exists
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
         raise HTTPException(status_code=404, detail="Decision context not found")
 
-    db_info_offers = db.exec(
-        select(InfoOffer).where(InfoOffer.context_id == context_id)
-    ).all()
-    return db_info_offers
+    # 2) Load all offers for that context
+    offers = db.exec(select(InfoOffer).where(InfoOffer.context_id == context_id)).all()
 
+    # 3) For each offer, decide which schema to use
+    result: List[Union[InfoOfferReadPrivate, InfoOfferReadPublic]] = []
+    for offer in offers:
+        is_seller = offer.seller.user_id == current_user.id
+        is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
+
+        if is_seller:
+            # seller sees the full private schema
+            result.append(InfoOfferReadPrivate.from_orm(offer))
+        elif is_buyer_who_purchased:
+            # buyer after purchase sees the public schema
+            result.append(InfoOfferReadPublic.from_orm(offer))
+        else:
+            # everyone else: public view
+            result.append(InfoOfferReadPublic.from_orm(offer))
+
+    return result
+
+
+@router.post(
+    "/questions/{context_id}/answers/inspect/",
+    response_model=list[InfoOfferReadPrivate],
+)
+def inspect_and_purchase_info_offers(
+    context_id: int,
+    info_offer_ids: List[int] = Query(
+        ..., description="List of InfoOffer IDs to inspect for purchasing"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    # 1) Verify context exists
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Decision context not found")
+
+    # 2) Ensure the user is a buyer with a profile
+    human_buyer = current_user.buyer_profile
+    if not human_buyer:
+        raise HTTPException(status_code=400, detail="User is not a buyer")
+
+    # 3) ensure context belongs to the buyer and is not recursive
+    if ctx.buyer_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not allowed to inspect this context"
+        )
+    if ctx.parent_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot manually inspect info offers in a recursive context",
+        )
+
+    # 4) get info offers with info_offer_ids and ensure their .context.id matches context_id
+    info_offers = db.exec(
+        select(InfoOffer).where(
+            InfoOffer.id.in_(info_offer_ids), InfoOffer.context_id == context_id
+        )
+    ).all()
+    if not info_offers:
+        raise HTTPException(
+            status_code=404, detail="No valid info offers found for the provided IDs"
+        )
+    if len(info_offers) != len(info_offer_ids):
+        raise HTTPException(
+            status_code=404,
+            detail="Some info offers not found or do not belong to this context",
+        )
+
+    # 5) Start LLM loop
+    # set selected info offers to .currently_being_inspected
+    for offer in info_offers:
+        offer.currently_being_inspected = True
+    # make sure this reflects in ctx.info_offers_being_inspected
+    assert set(ctx.info_offers_being_inspected) == set(info_offers)
+    # get llm to generate child context
+    child_ctx = generate_child_context(llm=human_buyer.default_child_llm, ctx=ctx)
+    create_decision_context(
+        decision_context=child_ctx, db=db, current_user=current_user
+    )
+    # await 
