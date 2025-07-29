@@ -34,12 +34,12 @@ class LLMBuyerType(BaseModel):
     # an AI agent, which can be instantiated into specific LLMBuyers
     name: Optional[str] = "gpt-4o_basic"
     description: Optional[str] = "basic GPT-4o LLM buyer"
-    querier_model: str = "openrouter/openai/chatgpt-4o-latest"
-    querier_system_prompt: str = "You are a helpful assistant."
-    chooser_model: str = "openrouter/openai/chatgpt-4o-latest"
-    chooser_system_prompt: str = "You are a helpful assistant."
-    decider_model: str = "openrouter/openai/chatgpt-4o-latest"
-    decider_system_prompt: str = "You are a helpful assistant."
+    model: str = "openrouter/openai/chatgpt-4o-latest"
+    system_prompt: str = "You are a helpful assistant."
+    # chooser_model: str = "openrouter/openai/chatgpt-4o-latest"
+    # chooser_system_prompt: str = "You are a helpful assistant."
+    # decider_model: str = "openrouter/openai/chatgpt-4o-latest"
+    # decider_system_prompt: str = "You are a helpful assistant."
     max_budget: float = 50.0
 
 # class LLMContext(BaseModel):
@@ -313,17 +313,17 @@ class DecisionContext(SQLModel, table=True):
     buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
     info_offers: List["InfoOffer"] = Relationship(back_populates="context")
 
-    @property
-    def info_offers_being_inspected(self) -> list["InfoOffer"]:
-        return [offer for offer in self.info_offers if offer.currently_being_inspected]
+    # @property
+    # def info_offers_being_inspected(self) -> list["InfoOffer"]:
+    #     return [offer for offer in self.info_offers if offer.currently_being_inspected]
     
-    @property
-    def info_offers_already_inspected(self) -> list["InfoOffer"]:
-        return [offer for offer in self.info_offers if offer.inspected]
+    # @property
+    # def info_offers_already_inspected(self) -> list["InfoOffer"]:
+    #     return [offer for offer in self.info_offers if offer.inspected]
 
-    @property
-    def info_offers_already_purchased(self) -> list["InfoOffer"]:
-        return [offer for offer in self.info_offers if offer.purchased]
+    # @property
+    # def info_offers_already_purchased(self) -> list["InfoOffer"]:
+    #     return [offer for offer in self.info_offers if offer.purchased]
 
 
 class InfoOffer(SQLModel, table=True):
@@ -340,10 +340,10 @@ class InfoOffer(SQLModel, table=True):
     )
     price: float = Field(default=0.0, index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
-    currently_being_inspected: bool = Field(
-        default=False,
-        description="Whether the info offer is currently being inspected by a buyer",
-    )
+    # currently_being_inspected: bool = Field(
+    #     default=False,
+    #     description="Whether the info offer is currently being inspected by a buyer",
+    # )
     inspected: bool = Field(
         default=False,
         description="Whether the info offer has been inspected by a buyer",

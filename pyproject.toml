@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "celery[redis]>=5.5.3",
     "fastapi-users-db-sqlmodel>=0.3.0",
     "fastapi-users[sqlalchemy]>=14.0.1",
     "fastapi[standard]>=0.116.0",

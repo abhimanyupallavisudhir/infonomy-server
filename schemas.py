@@ -136,11 +136,11 @@ class DecisionContextRead(SQLModel):
     seller_ids: Optional[List[int]]
     priority: int
     created_at: datetime
-    # for recursive
-    children: Optional[List["DecisionContextRead"]]
+    # # for recursive
+    # children: Optional[List["DecisionContextRead"]]
     parent: Optional["DecisionContextRead"]
-    info_offers_being_inspected: Optional[List["InfoOfferReadPrivate"]]
-    info_offers_already_purchased: Optional[List["InfoOfferReadPrivate"]]
+    # info_offers_being_inspected: Optional[List["InfoOfferReadPrivate"]]
+    # info_offers_already_purchased: Optional[List["InfoOfferReadPrivate"]]
 
     class Config:
         orm_mode = True
@@ -152,22 +152,12 @@ class DecisionContextCreateNonRecursive(SQLModel):
     seller_ids: Optional[List[int]] = None
     priority: int = 0
 
-class DecisionContextCreateRecursive(DecisionContextCreateNonRecursive):
-    parent_id: Optional[int] = None
-    info_offers_being_inspected: Optional[List[int]] = None
-    info_offers_already_purchased: Optional[List[int]] = None
-
 class DecisionContextUpdateNonRecursive(SQLModel):
     query: Optional[str] = None
     context_pages: Optional[List[str]] = None
     max_budget: Optional[float] = None
     seller_ids: Optional[List[int]] = None
     priority: Optional[int] = None
-
-class DecisionContextUpdateRecursive(DecisionContextUpdateNonRecursive):
-    parent_id: Optional[int] = None
-    info_offers_being_inspected: Optional[List[int]] = None
-    info_offers_already_purchased: Optional[List[int]] = None
 
 class InfoOfferReadPublic(SQLModel):
     id: int
