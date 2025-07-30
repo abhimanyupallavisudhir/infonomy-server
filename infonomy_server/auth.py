@@ -15,8 +15,8 @@ from fastapi_users.authentication import (
 from fastapi_users_db_sqlmodel import SQLModelUserDatabase  # sync adapter
 from sqlmodel import Session
 
-from database import get_db
-from models import User
+from infonomy_server.database import get_db
+from infonomy_server.models import User
 
 # Load environment variables from .env file
 load_dotenv()

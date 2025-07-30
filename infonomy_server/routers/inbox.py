@@ -2,8 +2,8 @@ from typing import List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
-from database import get_db
-from models import (
+from infonomy_server.database import get_db
+from infonomy_server.models import (
     User,
     DecisionContext,
     SellerMatcher,
@@ -11,8 +11,8 @@ from models import (
     HumanSeller,
     MatcherInbox,
 )
-from schemas import DecisionContextRead
-from auth import current_active_user
+from infonomy_server.schemas import DecisionContextRead
+from infonomy_server.auth import current_active_user
 
 router = APIRouter(tags=["inbox"])
 

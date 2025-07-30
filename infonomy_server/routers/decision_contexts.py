@@ -1,19 +1,19 @@
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
-from database import get_db
-from models import (
+from infonomy_server.database import get_db
+from infonomy_server.models import (
     User,
     DecisionContext,
     MatcherInbox,
 )
-from schemas import (
+from infonomy_server.schemas import (
     DecisionContextCreateNonRecursive,
     DecisionContextRead,
     DecisionContextUpdateNonRecursive,
 )
-from auth import current_active_user
-from utils import get_context_for_buyer, recompute_inbox_for_context
+from infonomy_server.auth import current_active_user
+from infonomy_server.utils import get_context_for_buyer, recompute_inbox_for_context
 
 router = APIRouter(tags=["decision_contexts"])
 

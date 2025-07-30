@@ -3,12 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 from celery.result import AsyncResult
 
-from database import get_db
-from auth import current_active_user
+from infonomy_server.database import get_db
+from infonomy_server.auth import current_active_user
 from celery_app import celery
-from tasks import inspect_task  # our Celery task
-from models import DecisionContext
-from schemas import UserRead
+from infonomy_server.tasks import inspect_task  # our Celery task
+from infonomy_server.models import DecisionContext
+from infonomy_server.schemas import UserRead
 
 router = APIRouter()
 

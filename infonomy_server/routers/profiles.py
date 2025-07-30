@@ -1,18 +1,18 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlmodel import Session, select
-from database import get_db
-from models import (
+from infonomy_server.database import get_db
+from infonomy_server.models import (
     User,
     HumanBuyer,
     HumanSeller,
 )
-from schemas import (
+from infonomy_server.schemas import (
 
     HumanBuyerRead,
     HumanBuyerCreate,
     HumanBuyerUpdate,
 )
-from auth import current_active_user
+from infonomy_server.auth import current_active_user
 
 router = APIRouter(tags=["profiles"])
 

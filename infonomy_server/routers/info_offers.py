@@ -2,20 +2,20 @@ from typing import Union, List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
-from database import get_db
-from models import (
+from infonomy_server.database import get_db
+from infonomy_server.models import (
     User,
     DecisionContext,
     InfoOffer,
     MatcherInbox,
 )
-from schemas import (
+from infonomy_server.schemas import (
     InfoOfferReadPrivate,
     InfoOfferReadPublic,
     InfoOfferCreate,
     InfoOfferUpdate,
 )
-from auth import current_active_user
+from infonomy_server.auth import current_active_user
 
 router = APIRouter(tags=["decision_contexts"])
 

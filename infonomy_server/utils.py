@@ -2,15 +2,15 @@ from typing import List
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends
 from sqlmodel import Session, select
-from database import get_db
-from models import (
+from infonomy_server.database import get_db
+from infonomy_server.models import (
     User,
     HumanBuyer,
     DecisionContext,
     SellerMatcher,
     MatcherInbox,
 )
-from auth import current_active_user
+from infonomy_server.auth import current_active_user
 
 def get_context_for_buyer(
     context_id: int,

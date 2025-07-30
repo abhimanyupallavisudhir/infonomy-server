@@ -1,6 +1,6 @@
 import requests
 from sqlmodel import Session, select
-from models import User, Question, Answer
+from infonomy_server.models import User
 user_data={"username": "dimension10009", "email": "abhimanyupss@gmail.com", "password": "blingblong"}
 question_data = {"title": "What is the meaning of life?", "content": "I want to know the meaning of life."}
 answer_data = {"content": "The meaning of life is subjective and can vary from person to person.", "question_id": 1}
@@ -14,9 +14,9 @@ class BearerAuth(requests.auth.AuthBase):
         return r
 
 # # register a new user
-# response = requests.post("http://localhost:8000/auth/register", json=user_data)
-# print(response.status_code)
-# print(response.json())
+response = requests.post("http://localhost:8000/auth/register", json=user_data)
+print(response.status_code)
+print(response.json())
 
 # login the user
 response = requests.post("http://localhost:8000/auth/jwt/login", data={"username": user_data["email"], "password": user_data["password"]})

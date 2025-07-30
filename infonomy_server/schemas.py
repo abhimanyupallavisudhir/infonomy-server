@@ -4,7 +4,7 @@ from typing import Optional, List
 from fastapi_users import schemas
 from sqlmodel import SQLModel, Field
 import uuid
-from models import LLMBuyerType
+from infonomy_server.models import LLMBuyerType
 
 class UserRead(schemas.BaseUser[int]):
     username: str
