@@ -314,7 +314,7 @@ class DecisionContext(SQLModel, table=True):
     #     default=None,
     #     description="Info offers already purchased in this decision context",
     # )
-    buyer_id: int = Field(foreign_key="human_buyer.user_id", index=True)
+    buyer_id: int = Field(foreign_key="humanbuyer.user_id", index=True)
     max_budget: float = Field(default=0.0, index=True)
     seller_ids: Optional[List[int]] = Field(
         sa_column=Column(JSON, index=True),
