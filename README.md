@@ -1,3 +1,7 @@
+# Description
+
+See https://abhimanyu.io/current_writing/metaculus_mockup.html
+
 ## To-do
 ### central to the design
 - [ ] make sure recursive decision contexts are only visible to bots, sellers who provided original, buyer who's already bought the inspected decision contexts
@@ -9,6 +13,7 @@
 
 ### important development
 - [ ] pre-populate with buyers and sellers
+- [ ] better flexibility in choosing LLM agents
 - [ ] browser extension
 - [ ] UI (maybe Q&A like UI)
 - [ ] metaculus bot
