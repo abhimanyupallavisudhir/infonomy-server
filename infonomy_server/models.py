@@ -34,7 +34,7 @@ class LLMBuyerType(BaseModel):
     name: Optional[str] = "gpt-4o_basic"
     description: Optional[str] = "basic GPT-4o LLM buyer"
     model: str = "openrouter/openai/chatgpt-4o-latest"
-    system_prompt: str = "You are a helpful assistant."
+    custom_prompt: Optional[str] = None
     # chooser_model: str = "openrouter/openai/chatgpt-4o-latest"
     # chooser_system_prompt: str = "You are a helpful assistant."
     # decider_model: str = "openrouter/openai/chatgpt-4o-latest"
