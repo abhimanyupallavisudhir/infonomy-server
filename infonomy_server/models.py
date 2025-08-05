@@ -297,7 +297,7 @@ class DecisionContext(SQLModel, table=True):
         back_populates="children",
         sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
     )
-    children: List[DecisionContext]         = Relationship(back_populates="parent")
+    children: List[DecisionContext] = Relationship(back_populates="parent")
 
     # history: Optional[List["DecisionContext"]] = Field(
     #     sa_column=Column(JSON, index=True),
