@@ -333,15 +333,6 @@ class DecisionContext(SQLModel, table=True):
     buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
     info_offers: List["InfoOffer"] = Relationship(back_populates="context")
 
-    @property
-    def parent_offers(self) -> List["InfoOffer"]:
-        """Get the InfoOffers from the parent context that this recursive context is inspecting"""
-        if not self.parent_id or not self.parent_offer_ids:
-            return []
-        # This will need to be implemented in application code that has access to the session
-        # For now, return empty list - the actual implementation will depend on the session context
-        return []
-
     @model_validator(mode="before")
     def validate_recursive_context(cls, values: dict):
         """Validate that recursive contexts have both parent_id and parent_offer_ids"""
