@@ -61,9 +61,16 @@ def inspect_task(
         # no more offers to inspect → finish
         return purchased
 
+    # just for the LLM
+    known_info: List[InfoOffer] = []
+    for p in purchased:
+        off = session.get(InfoOffer, p)
+        if off:
+            known_info.append(off)
+
     # 2) Invoke your LLM with full, private offer data
     #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
-    chosen_ids, child_ctx = call_llm(context=ctx, offers=offers, buyer=buyer.default_child_llm)
+    chosen_ids, child_ctx = call_llm(context=ctx, offers=offers, known_info=known_info, buyer=buyer.default_child_llm)
 
     for offer in offers:
         offer.inspected = True
