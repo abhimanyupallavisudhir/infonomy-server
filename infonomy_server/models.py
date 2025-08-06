@@ -333,22 +333,6 @@ class DecisionContext(SQLModel, table=True):
     buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
     info_offers: List["InfoOffer"] = Relationship(back_populates="context")
 
-    @model_validator(mode="before")
-    def validate_recursive_context(cls, values: dict):
-        """Validate that recursive contexts have both parent_id and parent_offer_ids"""
-        parent_id = values.get("parent_id")
-        parent_offer_ids = values.get("parent_offer_ids")
-        
-        # If this is a recursive context (has parent_id), it must have parent_offer_ids
-        if parent_id is not None and parent_offer_ids is None:
-            raise ValueError("Recursive DecisionContext must specify parent_offer_ids when parent_id is set")
-        
-        # If parent_offer_ids is specified, parent_id must also be specified
-        if parent_offer_ids is not None and parent_id is None:
-            raise ValueError("DecisionContext with parent_offer_ids must also specify parent_id")
-        
-        return values
-
     # @property
     # def info_offers_being_inspected(self) -> list["InfoOffer"]:
     #     return [offer for offer in self.info_offers if offer.currently_being_inspected]
@@ -471,15 +455,6 @@ def set_seller_property_methods(session: Session):
             .where(InfoOffer.seller_id == self.id)
         ).all()
     
-    def parent_offers_property_for_decision_context(self):
-        """Property method for DecisionContext instances to get parent offers being inspected"""
-        if not self.parent_id or not self.parent_offer_ids:
-            return []
-        return session.exec(
-            select(InfoOffer)
-            .where(InfoOffer.id.in_(self.parent_offer_ids))
-            .where(InfoOffer.context_id == self.parent_id)
-        ).all()
     
     # Monkey patch the classes to add the properties
     SellerMatcher.seller = property(seller_property_for_matcher)
@@ -488,4 +463,3 @@ def set_seller_property_methods(session: Session):
     BotSeller.matchers = property(matchers_property_for_bot_seller)
     HumanSeller.info_offers = property(info_offers_property_for_human_seller)
     BotSeller.info_offers = property(info_offers_property_for_bot_seller)
-    DecisionContext.parent_offers = property(parent_offers_property_for_decision_context)
