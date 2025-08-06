@@ -82,16 +82,18 @@ InfoOffers:
 
 
 def render_decision_context(ctx: DecisionContext) -> str:
-    out = {
+    if ctx.parent_id is None:
+        out = {
         # "id": ctx.id,
         "query": ctx.query,
         "context_pages": ctx.context_pages,
     }
-    if ctx.parent_id is not None:
-        out |= {"is_recursive": True}
-        out |= {"parent_context": render_decision_context(ctx.parent)}
     else:
-        out |= {"is_recursive": False}
+        out = {
+            "is_recursive": True,
+            "for_evaluating_info_offers": "",
+            "parent_context": render_decision_context(ctx.parent)
+        }
     return str(out)
 
 
