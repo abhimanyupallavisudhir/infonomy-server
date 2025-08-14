@@ -1,11 +1,19 @@
 from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship, Session, select
-from sqlalchemy import Column, JSON, String, CheckConstraint #, Computed, Float, case
+from sqlalchemy import Column, JSON, String, CheckConstraint, Table, ForeignKey #, Computed, Float, case
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
 from typing import Optional, List, Literal, Union
 from pydantic import ConfigDict, BaseModel, model_validator
 import datetime
+
+# Association table for the many-to-many relationship between DecisionContext and InfoOffer
+decision_context_parent_offers = Table(
+    'decision_context_parent_offers',
+    SQLModel.metadata,
+    Column('decision_context_id', ForeignKey('decisioncontext.id'), primary_key=True),
+    Column('info_offer_id', ForeignKey('infooffer.id'), primary_key=True)
+)
 
 class User(SQLModelBaseUserDB, table=True):
     # <-- tell Pydantic to allow SQLAlchemy Mapped[...] types
@@ -293,16 +301,23 @@ class DecisionContext(SQLModel, table=True):
 
     # for recursive decision contexts
     parent_id: Optional[int] = Field(default=None, foreign_key="decisioncontext.id", index=True)
-    parent_offer_ids: Optional[List[int]] = Field(
-        sa_column=Column(JSON, index=True), 
-        default=None, 
-        description="List of InfoOffer IDs from the parent context that this recursive context is inspecting"
-    )
+    # parent_offer_ids: Optional[List[int]] = Field(
+    #     sa_column=Column(JSON, index=True), 
+    #     default=None, 
+    #     description="List of InfoOffer IDs from the parent context that this recursive context is inspecting"
+    # )
     parent:  Optional[DecisionContext]      = Relationship(
         back_populates="children",
         sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
     )
     children: List[DecisionContext] = Relationship(back_populates="parent")
+    parent_offers: List["InfoOffer"] = Relationship(
+        link_table=decision_context_parent_offers,
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "overlaps": "parent_contexts",
+        }
+    )
 
     # history: Optional[List["DecisionContext"]] = Field(
     #     sa_column=Column(JSON, index=True),
@@ -345,6 +360,29 @@ class DecisionContext(SQLModel, table=True):
     # def info_offers_already_purchased(self) -> list["InfoOffer"]:
     #     return [offer for offer in self.info_offers if offer.purchased]
 
+    # NEW: Convenience methods for working with parent offers
+    @property
+    def parent_offer_ids(self) -> List[int]:
+        """Get list of parent offer IDs (for backward compatibility)"""
+        return [offer.id for offer in self.parent_offers if offer.id is not None]
+
+    def add_parent_offer(self, offer: "InfoOffer") -> None:
+        """Add a parent offer to this context"""
+        if offer not in self.parent_offers:
+            self.parent_offers.append(offer)
+
+    def add_parent_offers_by_ids(self, session: Session, offer_ids: List[int]) -> None:
+        """Add parent offers by their IDs"""
+        offers = session.exec(
+            select(InfoOffer).where(InfoOffer.id.in_(offer_ids))
+        ).all()
+        for offer in offers:
+            self.add_parent_offer(offer)
+
+    def remove_parent_offer(self, offer: "InfoOffer") -> None:
+        """Remove a parent offer from this context"""
+        if offer in self.parent_offers:
+            self.parent_offers.remove(offer)
 
 class InfoOffer(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -377,12 +415,21 @@ class InfoOffer(SQLModel, table=True):
     # Relationships
     context: DecisionContext = Relationship(back_populates="info_offers")
 
+    parent_contexts: List[DecisionContext] = Relationship(
+        link_table=decision_context_parent_offers,
+        back_populates="parent_offers",
+        sa_relationship_kwargs={
+            "overlaps": "parent_offers"  # Resolve overlapping relationships
+        }
+    )
+
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
         """Dynamically fetch the seller based on seller_type and seller_id"""
         # This will need to be implemented in application code that has access to the session
         # For now, return None - the actual implementation will depend on the session context
         return None
+
 
 class MatcherInbox(SQLModel, table=True):
     id: int = Field(primary_key=True)
