@@ -62,6 +62,8 @@ information offered here itself.
 
 -------
 DecisionContext:
+(if this is a recursive DecisionContext, it will include attributes "parent_context" and "parent_offers" --- i.e. this DecisionContext was
+spawned by a buyer deciding whether to buy the parent_offers for parent_context)
 -------
 {ctx_str}
 
@@ -91,13 +93,13 @@ def render_decision_context(ctx: DecisionContext) -> str:
     else:
         out = {
             "is_recursive": True,
-            "for_evaluating_info_offers": "",
-            "parent_context": render_decision_context(ctx.parent)
+            "parent_context": render_decision_context(ctx.parent),
+            "parent_offers": render_info_offers_private(ctx.parent_offers)
         }
     return str(out)
 
 
-def render_info_offer(io: InfoOffer) -> dict:
+def render_info_offer_private(io: InfoOffer) -> dict:
     return {
         "id": io.id,
         "seller_id": io.seller_id,
@@ -109,8 +111,8 @@ def render_info_offer(io: InfoOffer) -> dict:
     }
 
 
-def render_info_offers(offers: List[InfoOffer]) -> str:
-    return str([render_info_offer(io) for io in offers])
+def render_info_offers_private(offers: List[InfoOffer]) -> str:
+    return str([render_info_offer_private(io) for io in offers])
 
 
 def call_llm(
@@ -126,8 +128,8 @@ def call_llm(
             "role": "user",
             "content": prompt.format(
                 ctx_str=render_decision_context(context),
-                known_info_str=render_info_offers(known_info),
-                offers_str=render_info_offers(offers),
+                known_info_str=render_info_offers_private(known_info),
+                offers_str=render_info_offers_private(offers),
                 used_budget=used_budget,
             ),
         },

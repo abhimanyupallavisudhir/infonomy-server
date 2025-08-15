@@ -4,7 +4,7 @@ See https://abhimanyu.io/current_writing/metaculus_mockup.html
 
 ## To-do
 ### central to the design
-- [ ] figure out how *InfoOffers* appear as parent of recursive DecisionContexts
+- [x] figure out how *InfoOffers* appear as parent of recursive DecisionContexts
 - [x] budget enforcement
 - [ ] implement BotSellers and make sure recursive decision contexts are only visible to bots, sellers who provided original, buyer who's already bought the inspected decision contexts
 
