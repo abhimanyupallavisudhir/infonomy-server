@@ -6,7 +6,7 @@ See https://abhimanyu.io/current_writing/metaculus_mockup.html
 ### central to the design
 - [x] figure out how *InfoOffers* appear as parent of recursive DecisionContexts
 - [x] budget enforcement
-- [ ] implement BotSellers and make sure recursive decision contexts are only visible to bots, sellers who provided original, buyer who's already bought the inspected decision contexts
+- [x] implement BotSellers and make sure recursive decision contexts are only visible to bots, sellers who provided original, buyer who's already bought the inspected decision contexts
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing

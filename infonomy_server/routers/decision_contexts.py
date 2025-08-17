@@ -90,10 +90,11 @@ def read_decision_context(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
-    # TODO: add check to make sure recursive contexts are only visible to bot sellers, follow-up sellers and buyers who have already purchased
     db_context = db.get(DecisionContext, context_id)
     if not db_context:
         raise HTTPException(status_code=404, detail="Decision context not found")
+    if db_context.parent_id is not None:
+        raise HTTPException(status_code=403, detail="Recursive contexts are not made public")
     return db_context
 
 
