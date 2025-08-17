@@ -75,3 +75,4 @@ def read_decision_contexts_for_seller(
     )
     results = db.exec(stmt).all()
     return results
+

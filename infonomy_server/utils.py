@@ -9,6 +9,7 @@ from infonomy_server.models import (
     DecisionContext,
     SellerMatcher,
     MatcherInbox,
+    BotSeller,
 )
 from infonomy_server.auth import current_active_user
 
@@ -86,4 +87,8 @@ def recompute_inbox_for_context(ctx: DecisionContext, db: Session):
     if new_items:
         db.add_all(new_items)
         db.commit()
+    
+    # 5) Trigger BotSeller processing for this context
+    from infonomy_server.tasks import process_bot_sellers_for_context
+    process_bot_sellers_for_context.delay(ctx.id)
 

@@ -78,3 +78,4 @@ def create_human_seller(
     db.commit()
     db.refresh(human_seller)
     return human_seller
+
