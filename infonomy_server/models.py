@@ -201,8 +201,8 @@ class BotSeller(SQLModel, table=True):
     __tablename__ = "bot_seller"
     __table_args__ = (
         CheckConstraint(
-            "info IS NOT NULL OR (llm_model IS NOT NULL AND llm_prompt IS NOT NULL)",
-            name="ck_bot_seller_info_or_llm"
+            "(info IS NOT NULL AND price IS NOT NULL) OR (llm_model IS NOT NULL AND llm_prompt IS NOT NULL)",
+            name="ck_bot_seller_info_price_or_llm"
         ),
     )
     id: int = Field(primary_key=True)
@@ -211,6 +211,11 @@ class BotSeller(SQLModel, table=True):
     info: Optional[str] = Field(
         sa_column=Column(String, nullable=True),
         description="For bots that just regurgitate a piece of info"
+    )
+
+    price: Optional[float] = Field(
+        default=None,
+        description="Price for the information provided by this bot (required for fixed info bots)"
     )
 
     llm_model: Optional[str] = Field(
@@ -243,13 +248,19 @@ class BotSeller(SQLModel, table=True):
     model_config = ConfigDict(validate_default=True, validate_assignment=True)
 
     @model_validator(mode="before")
-    def check_info_or_llm(cls, values: dict):
+    def check_info_price_or_llm(cls, values: dict):
         info = values.get("info")
+        price = values.get("price")
         model = values.get("llm_model")
         prompt = values.get("llm_prompt")
-        if info is None and not (model and prompt):
+        
+        # Must have either (info and price) or (llm_model and llm_prompt)
+        has_fixed_info = info is not None and price is not None
+        has_llm = model is not None and prompt is not None
+        
+        if not (has_fixed_info or has_llm):
             raise ValueError(
-                "Must set either `info` or both `llm_model` and `llm_prompt`."
+                "Must set either `info` and `price` or both `llm_model` and `llm_prompt`."
             )
         return values
 

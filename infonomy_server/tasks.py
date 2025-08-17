@@ -119,17 +119,17 @@ def _matcher_matches_context(matcher: SellerMatcher, context: DecisionContext, s
 def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, session: Session) -> Optional[InfoOffer]:
     """Generate an InfoOffer from a given context"""
     
-    if bot_seller.info:
+    if bot_seller.info and bot_seller.price is not None:
         # Fixed info bot
         private_info = bot_seller.info
         public_info = f"Fixed information from BotSeller {bot_seller.id}"
-        price = 0.0  # Fixed info bots are free by default
+        price = bot_seller.price  # Use the price set on the BotSeller
     elif bot_seller.llm_model and bot_seller.llm_prompt:
         # LLM bot - call the LLM to generate info
         try:
-            private_info = _call_bot_seller_llm(bot_seller, context)
-            public_info = f"AI-generated information from BotSeller {bot_seller.id}"
-            price = 0.0  # LLM bots are free by default
+            private_info, public_info, llm_price = _call_bot_seller_llm(bot_seller, context)
+            # Use the price returned by the LLM, but ensure it's within budget
+            price = min(llm_price, context.max_budget)
         except Exception as e:
             # If LLM call fails, don't create an offer
             return None
@@ -149,8 +149,8 @@ def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, 
     )
 
 
-def _call_bot_seller_llm(bot_seller: BotSeller, context: DecisionContext) -> str:
-    """Call the LLM for a BotSeller to generate information"""
+def _call_bot_seller_llm(bot_seller: BotSeller, context: DecisionContext) -> tuple[str, str, float]:
+    """Call the LLM for a BotSeller to generate information with structured response"""
     
     # Create a simple prompt for the bot seller
     prompt = f"""
@@ -164,6 +164,13 @@ Max Budget: {context.max_budget}
 Please provide helpful, relevant information based on your knowledge and the context provided.
 
 {bot_seller.llm_prompt}
+
+You must respond with:
+1. private_info: The actual information the buyer will receive after purchase
+2. public_info: A brief, public description of what you're offering (visible before purchase)
+3. price: A reasonable price for this information (consider the value and buyer's budget)
+
+Make sure the price is reasonable and within the buyer's budget of {context.max_budget}.
 """
     
     try:
@@ -174,16 +181,32 @@ Please provide helpful, relevant information based on your knowledge and the con
             DEFAULT_LLM_MAX_TOKENS = 500
             DEFAULT_LLM_TEMPERATURE = 0.7
         
-        response = completion(
+        # Create a response model for structured output
+        from pydantic import BaseModel
+        
+        class BotSellerResponse(BaseModel):
+            private_info: str
+            public_info: str
+            price: float
+        
+        # Use instructor pattern for structured output
+        from infonomy_server.llm import CLIENT
+        
+        response = CLIENT.chat.completions.create(
             model=bot_seller.llm_model,
+            response_model=BotSellerResponse,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=DEFAULT_LLM_MAX_TOKENS,
             temperature=DEFAULT_LLM_TEMPERATURE
         )
-        return response.choices[0].message.content
+        
+        return response.private_info, response.public_info, response.price
+        
     except Exception as e:
         print(f"Error calling LLM for BotSeller {bot_seller.id}: {str(e)}")
-        return f"Error generating information: {str(e)}"
+        # Return fallback values if LLM call fails
+        fallback_info = f"Error generating information: {str(e)}"
+        return fallback_info, "Information temporarily unavailable", 0.0
 
 
 @shared_task(bind=True)

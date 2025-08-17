@@ -86,6 +86,7 @@ async def test_botseller_functionality():
         try:
             botseller_data = {
                 "info": "This is a test BotSeller that provides fixed information.",
+                "price": 5.0,
                 "llm_model": None,
                 "llm_prompt": None
             }
@@ -177,6 +178,30 @@ async def test_botseller_functionality():
         print("\n✓ BotSeller functionality test completed successfully!")
         print(f"\nCreated BotSeller ID: {botseller_id}")
         print(f"Created Matcher ID: {matcher_id}")
+        
+        # Test creating an LLM BotSeller
+        print("\n8. Testing LLM BotSeller creation...")
+        try:
+            llm_botseller_data = {
+                "info": None,
+                "price": None,
+                "llm_model": "gpt-4",
+                "llm_prompt": "You are a helpful AI assistant. Provide concise, accurate information based on the user's query."
+            }
+            
+            llm_botseller_response = await client.post(
+                f"{BASE_URL}/bot-sellers/",
+                json=llm_botseller_data,
+                headers=headers
+            )
+            if llm_botseller_response.status_code == 200:
+                llm_botseller_info = llm_botseller_response.json()
+                print(f"✓ LLM BotSeller created with ID: {llm_botseller_info['id']}")
+            else:
+                print(f"✗ LLM BotSeller creation failed: {llm_botseller_response.status_code}")
+        except Exception as e:
+            print(f"✗ LLM BotSeller creation error: {e}")
+        
         print("\nYou can now test the full workflow by:")
         print("1. Creating a DecisionContext that matches the matcher")
         print("2. Checking that the BotSeller automatically generates an InfoOffer")

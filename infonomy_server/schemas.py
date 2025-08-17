@@ -112,6 +112,7 @@ class BotSellerRead(SellerRead):
     id: int
     user_id: int
     info: Optional[str]
+    price: Optional[float]
     llm_model: Optional[str]
     llm_prompt: Optional[str]
 
@@ -119,11 +120,13 @@ class BotSellerRead(SellerRead):
 # subclass SQLModel because we don't have a SellerCreate or SellerUpdate model
 class BotSellerCreate(SQLModel):
     info: Optional[str] = None
+    price: Optional[float] = None
     llm_model: Optional[str] = None
     llm_prompt: Optional[str] = None
 
 class BotSellerUpdate(SQLModel):
     info: Optional[str] = None
+    price: Optional[float] = None
     llm_model: Optional[str] = None
     llm_prompt: Optional[str] = None
 
