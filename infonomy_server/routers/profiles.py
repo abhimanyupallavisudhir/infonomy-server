@@ -42,7 +42,7 @@ def read_current_human_buyer(
     return db_human_buyer
 
 
-@router.update("/buyers/me", response_model=HumanBuyerRead)
+@router.put("/buyers/me", response_model=HumanBuyerRead)
 def update_current_human_buyer(
     human_buyer_updates: HumanBuyerUpdate,
     db: Session = Depends(get_db),

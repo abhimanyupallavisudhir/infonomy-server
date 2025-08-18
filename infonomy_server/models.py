@@ -323,8 +323,8 @@ class DecisionContext(SQLModel, table=True):
     )
     children: List[DecisionContext] = Relationship(back_populates="parent")
     parent_offers: List["InfoOffer"] = Relationship(
-        link_model=decision_context_parent_offers,
         sa_relationship_kwargs={
+            "secondary": decision_context_parent_offers,
             "lazy": "selectin",
             "overlaps": "parent_contexts",
         }
@@ -427,9 +427,9 @@ class InfoOffer(SQLModel, table=True):
     context: DecisionContext = Relationship(back_populates="info_offers")
 
     parent_contexts: List[DecisionContext] = Relationship(
-        link_model=decision_context_parent_offers,
         back_populates="parent_offers",
         sa_relationship_kwargs={
+            "secondary": decision_context_parent_offers,
             "overlaps": "parent_offers"  # Resolve overlapping relationships
         }
     )
