@@ -2,6 +2,13 @@
 
 See https://abhimanyu.io/current_writing/metaculus_mockup.html
 
+# Usage
+
+```python
+celery -A celery_app worker --loglevel=info
+fastapi dev main.py
+```
+
 ## To-do
 ### central to the design
 - [x] figure out how *InfoOffers* appear as parent of recursive DecisionContexts
