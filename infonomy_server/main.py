@@ -4,7 +4,7 @@ from infonomy_server.database import create_db_and_tables, get_db
 from infonomy_server.models import User
 from infonomy_server.schemas import UserCreate, UserRead, UserUpdate
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
-from infonomy_server.routers import decision_contexts, bot_sellers, profiles
+from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
 
 app = FastAPI(title="Q&A Platform API", version="1.0.0")
 
@@ -45,6 +45,9 @@ app.include_router(
 
 # Include our custom routes
 app.include_router(decision_contexts.router)
+app.include_router(info_offers.router)
+app.include_router(inspection.router)
+app.include_router(inbox.router)
 app.include_router(bot_sellers.router)
 app.include_router(profiles.router)
 
