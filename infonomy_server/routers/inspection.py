@@ -10,7 +10,7 @@ from infonomy_server.tasks import inspect_task  # our Celery task
 from infonomy_server.models import DecisionContext
 from infonomy_server.schemas import UserRead
 
-router = APIRouter()
+router = APIRouter(tags=["inspection"])
 
 @router.post(
     "/questions/{context_id}/inspect",

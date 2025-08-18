@@ -52,7 +52,7 @@ def read_decision_contexts_for_seller(
     current_user: User = Depends(current_active_user),
 ):
     # 1) Load the seller (must be a HumanSeller)
-    seller = db.get(Seller, seller_id)
+    seller = db.get(HumanSeller, seller_id)
     if not seller or not isinstance(seller, HumanSeller):
         raise HTTPException(status_code=404, detail="Seller not found")
     if seller.user_id != current_user.id:

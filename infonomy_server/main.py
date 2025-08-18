@@ -53,7 +53,7 @@ app.include_router(profiles.router)
 
 # # User Endpoints
 
-@app.get("/users/", response_model=list[UserRead])
+@app.get("/users/", response_model=list[UserRead], tags=["users"])
 def get_users(db: Session = Depends(get_db)):
     db_users = db.exec(select(User)).all()
     return db_users
