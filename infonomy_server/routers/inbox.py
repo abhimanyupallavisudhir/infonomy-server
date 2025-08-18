@@ -7,7 +7,6 @@ from infonomy_server.models import (
     User,
     DecisionContext,
     SellerMatcher,
-    Seller,
     HumanSeller,
     MatcherInbox,
 )
