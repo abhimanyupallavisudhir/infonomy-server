@@ -3,19 +3,6 @@ from sqlmodel import Session, select
 from infonomy_server.models import User, HumanBuyer, HumanSeller
 from infonomy_server.schemas import HumanBuyerCreate
 
-REGISTER = True
-
-# Define user data
-USERS = {
-    "0": {"username": "user0", "email": "user0@gmail.com", "password": "blingblong"},
-    # "1": {"username": "user1", "email": "user1@gmail.com", "password": "blingblong"},
-    # "2": {"username": "user2", "email": "user2@gmail.com", "password": "blingblong"},
-    # "3": {"username": "user3", "email": "user3@gmail.com", "password": "blingblong"},
-    # "4": {"username": "user4", "email": "user4@gmail.com", "password": "blingblong"},
-    # "5": {"username": "user5", "email": "user5@gmail.com", "password": "blingblong"},
-    # "6": {"username": "user6", "email": "user6@gmail.com", "password": "blingblong"}
-}
-
 class BearerAuth(requests.auth.AuthBase):
     def __init__(self, token: str):
         self.token = token
@@ -23,29 +10,46 @@ class BearerAuth(requests.auth.AuthBase):
         r.headers["Authorization"] = f"Bearer {self.token}"
         return r
 
-# Register
-if REGISTER:
-    for user in USERS.values():
-        response = requests.post("http://localhost:8000/auth/register", json=user)
-        print(f"Registration of {user['username']}: {response.status_code}")
-        print(response)
-
-# Login
-for i, user in USERS.items():
-    response = requests.post("http://localhost:8000/auth/jwt/login", data={"username": user["email"], "password": user["password"]})
-    USERS[i]["response"] = response
+class InfonomyUser:
+    def __init__(self, username: str, email: str, password: str):
+        self.username = username
+        self.email = email
+        self.password = password
     
-    ## include tokens
-    USERS[i]["token"] = response.json()["access_token"]
-    USERS[i]["session"] = requests.Session()
-    USERS[i]["session"].auth = BearerAuth(user["token"])
+    def register(self):
+        response = requests.post("http://localhost:8000/auth/register", json={"username": self.username, "email": self.email, "password": self.password})
+        print(f"Registration of {self.username}: {response.status_code}")
+        print(response)
+    
+    def login(self):
+        response = requests.post("http://localhost:8000/auth/jwt/login", data={"username": self.email, "password": self.password})
+        self.token = response.json()["access_token"]
+        self.session = requests.Session()
+        self.session.auth = BearerAuth(self.token)
+    
+    def create_buyer(self):
+        response = self.session.post("http://localhost:8000/buyers", json={})
+        print(f"Create buyer profile of {self.username}: {response.status_code}")
+        print(response.json())
+    
+    def create_seller(self):
+        response = self.session.post("http://localhost:8000/sellers", json={})
+        print(f"Create seller profile of {self.username}: {response.status_code}")
+        print(response.json())
 
-    ## Create buyer and seller profiles
-    session = user["session"]
-    response = session.post("http://localhost:8000/profiles/buyers", data={})
-    print(response.status_code)
-    print(response.json())
 
-    response = session.post("http://localhost:8000/profiles/sellers", data={})
-    print(response.status_code)
-    print(response.json())
+user0 = InfonomyUser("user0", "user0@gmail.com", "blingblong")
+user1 = InfonomyUser("user1", "user1@gmail.com", "blingblong")
+user2 = InfonomyUser("user2", "user2@gmail.com", "blingblong")
+user3 = InfonomyUser("user3", "user3@gmail.com", "blingblong")
+user4 = InfonomyUser("user4", "user4@gmail.com", "blingblong")
+user5 = InfonomyUser("user5", "user5@gmail.com", "blingblong")
+user6 = InfonomyUser("user6", "user6@gmail.com", "blingblong")
+
+users = [user0, user1, user2, user3, user4, user5, user6]
+
+for user in users:
+    user.register()
+    user.login()
+    user.create_buyer()
+    user.create_seller()

@@ -15,7 +15,8 @@ fastapi dev main.py
 - [x] figure out how *InfoOffers* appear as parent of recursive DecisionContexts
 - [x] budget enforcement
 - [x] implement BotSellers and make sure recursive decision contexts are only visible to bots, sellers who provided original, buyer who's already bought the inspected decision contexts
-
+- [ ] make sure rates are correctly counted and maintained
+- [ ] let users put their API keys
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
 - [ ] maybe let people other than original buyer also buy info offers
@@ -23,6 +24,7 @@ fastapi dev main.py
 
 
 ### important development
+- [ ] transition to PostgreSQL
 - [ ] pre-populate with buyers and sellers
 - [ ] verified info
 - [ ] logging=True
