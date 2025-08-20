@@ -1,7 +1,6 @@
 from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship, Session, select
 from sqlalchemy import Column, JSON, String, CheckConstraint, Table, ForeignKey #, Computed, Float, case
-from sqlalchemy.orm import Mapped
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
 from typing import Optional, List, Literal, Union
@@ -29,13 +28,13 @@ class User(SQLModelBaseUserDB, table=True):
     balance: float = Field(default=0.0)
 
     # Relationships
-    buyer_profile: Mapped[Optional["HumanBuyer"]] = Relationship(
+    buyer_profile: Optional["HumanBuyer"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"uselist": False}
     )
-    seller_profile: Mapped[Optional["HumanSeller"]] = Relationship(
+    seller_profile: Optional["HumanSeller"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"uselist": False}
     )
-    bot_sellers: Mapped[List["BotSeller"]] = Relationship(back_populates="user")
+    bot_sellers: List["BotSeller"] = Relationship(back_populates="user")
 
 
 class LLMBuyerType(BaseModel):
@@ -152,7 +151,7 @@ class HumanBuyer(SQLModel, table=True):
 
     # Relationships
     user: User = Relationship(back_populates="buyer_profile")
-    decision_contexts: Mapped[List["DecisionContext"]] = Relationship(back_populates="buyer")
+    decision_contexts: List["DecisionContext"] = Relationship(back_populates="buyer")
 
 
 # class LLMBuyer(Buyer, table=True):
@@ -297,7 +296,7 @@ class SellerMatcher(SQLModel, table=True):
     )
 
     # Relationships
-    inbox_items: Mapped[List["MatcherInbox"]] = Relationship(back_populates="matcher", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    inbox_items: List["MatcherInbox"] = Relationship(back_populates="matcher", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
@@ -322,8 +321,8 @@ class DecisionContext(SQLModel, table=True):
         back_populates="children",
         sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
     )
-    children: Mapped[List[DecisionContext]] = Relationship(back_populates="parent")
-    parent_offers: Mapped[List["InfoOffer"]] = Relationship(
+    children: List[DecisionContext] = Relationship(back_populates="parent")
+    parent_offers: List["InfoOffer"] = Relationship(
         sa_relationship_kwargs={
             "secondary": decision_context_parent_offers,
             "lazy": "selectin",
@@ -358,7 +357,7 @@ class DecisionContext(SQLModel, table=True):
 
     # Relationships
     buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
-    info_offers: Mapped[List["InfoOffer"]] = Relationship(back_populates="context")
+    info_offers: List["InfoOffer"] = Relationship(back_populates="context")
 
     # @property
     # def info_offers_being_inspected(self) -> list["InfoOffer"]:
@@ -427,7 +426,7 @@ class InfoOffer(SQLModel, table=True):
     # Relationships
     context: DecisionContext = Relationship(back_populates="info_offers")
 
-    parent_contexts: Mapped[List[DecisionContext]] = Relationship(
+    parent_contexts: List[DecisionContext] = Relationship(
         back_populates="parent_offers",
         sa_relationship_kwargs={
             "secondary": decision_context_parent_offers,
