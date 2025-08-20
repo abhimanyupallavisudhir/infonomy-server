@@ -1,4 +1,4 @@
-from __future__ import annotations
+# from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship, Session, select
 from sqlalchemy import Column, JSON, String, CheckConstraint, Table, ForeignKey #, Computed, Float, case
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
@@ -317,11 +317,11 @@ class DecisionContext(SQLModel, table=True):
     #     default=None, 
     #     description="List of InfoOffer IDs from the parent context that this recursive context is inspecting"
     # )
-    parent:  Optional[DecisionContext]      = Relationship(
+    parent:  Optional["DecisionContext"]      = Relationship(
         back_populates="children",
         sa_relationship_kwargs={"remote_side": "DecisionContext.id"}
     )
-    children: List[DecisionContext] = Relationship(back_populates="parent")
+    children: List["DecisionContext"] = Relationship(back_populates="parent")
     parent_offers: List["InfoOffer"] = Relationship(
         sa_relationship_kwargs={
             "secondary": decision_context_parent_offers,
