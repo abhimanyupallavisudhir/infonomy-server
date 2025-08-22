@@ -5,14 +5,18 @@ from infonomy_server.models import (
     User,
     HumanBuyer,
     HumanSeller,
+    SellerMatcher,
 )
 from infonomy_server.schemas import (
-
     HumanBuyerRead,
     HumanBuyerCreate,
     HumanBuyerUpdate,
+    SellerMatcherRead,
+    SellerMatcherCreate,
+    SellerMatcherUpdate,
 )
 from infonomy_server.auth import current_active_user
+from typing import List
 
 router = APIRouter(tags=["profiles"])
 
@@ -78,4 +82,116 @@ def create_human_seller(
     db.commit()
     db.refresh(human_seller)
     return human_seller
+
+
+@router.get("/sellers/me", response_model=HumanSeller)
+def read_current_human_seller(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user's seller profile"""
+    db_human_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+    ).first()
+    if not db_human_seller:
+        raise HTTPException(status_code=404, detail="Human seller profile not found")
+    return db_human_seller
+
+
+# HumanSeller Matcher CRUD operations
+@router.post("/sellers/me/matchers", response_model=SellerMatcherRead)
+def create_human_seller_matcher(
+    matcher: SellerMatcherCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Create a new matcher for the current user's HumanSeller profile"""
+    human_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+    ).first()
+    if not human_seller:
+        raise HTTPException(status_code=404, detail="Human seller profile not found")
+    
+    db_matcher = SellerMatcher(
+        **matcher.dict(),
+        seller_id=human_seller.id,
+        seller_type="human_seller"
+    )
+    db.add(db_matcher)
+    db.commit()
+    db.refresh(db_matcher)
+    return db_matcher
+
+
+@router.get("/sellers/me/matchers", response_model=List[SellerMatcherRead])
+def list_human_seller_matchers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """List all matchers for the current user's HumanSeller profile"""
+    human_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+    ).first()
+    if not human_seller:
+        raise HTTPException(status_code=404, detail="Human seller profile not found")
+    
+    matchers = db.exec(
+        select(SellerMatcher)
+        .where(SellerMatcher.seller_id == human_seller.id)
+        .where(SellerMatcher.seller_type == "human_seller")
+    ).all()
+    return matchers
+
+
+@router.put("/sellers/me/matchers/{matcher_id}", response_model=SellerMatcherRead)
+def update_human_seller_matcher(
+    matcher_id: int,
+    matcher_updates: SellerMatcherUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Update a matcher for the current user's HumanSeller profile"""
+    human_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+    ).first()
+    if not human_seller:
+        raise HTTPException(status_code=404, detail="Human seller profile not found")
+    
+    db_matcher = db.get(SellerMatcher, matcher_id)
+    if not db_matcher:
+        raise HTTPException(status_code=404, detail="Matcher not found")
+    if db_matcher.seller_id != human_seller.id or db_matcher.seller_type != "human_seller":
+        raise HTTPException(status_code=404, detail="Matcher not found for this HumanSeller")
+    
+    for k, v in matcher_updates.dict(exclude_unset=True).items():
+        setattr(db_matcher, k, v)
+    
+    db.add(db_matcher)
+    db.commit()
+    db.refresh(db_matcher)
+    return db_matcher
+
+
+@router.delete("/sellers/me/matchers/{matcher_id}")
+def delete_human_seller_matcher(
+    matcher_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Delete a matcher for the current user's HumanSeller profile"""
+    human_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+    ).first()
+    if not human_seller:
+        raise HTTPException(status_code=404, detail="Human seller profile not found")
+    
+    db_matcher = db.get(SellerMatcher, matcher_id)
+    if not db_matcher:
+        raise HTTPException(status_code=404, detail="Matcher not found")
+    if db_matcher.seller_id != human_seller.id or db_matcher.seller_type != "human_seller":
+        raise HTTPException(status_code=404, detail="Matcher not found for this HumanSeller")
+    
+    db.delete(db_matcher)
+    db.commit()
+    return {"message": "Matcher deleted successfully"}
 

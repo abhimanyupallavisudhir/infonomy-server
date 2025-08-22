@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlmodel import Session, select
 from infonomy_server.database import get_db
 from infonomy_server.models import (
@@ -14,6 +14,7 @@ from infonomy_server.schemas import (
 )
 from infonomy_server.auth import current_active_user
 from infonomy_server.utils import get_context_for_buyer, recompute_inbox_for_context
+from typing import List, Optional
 
 router = APIRouter(tags=["decision_contexts"])
 
@@ -96,6 +97,71 @@ def read_decision_context(
     if db_context.parent_id is not None:
         raise HTTPException(status_code=403, detail="Recursive contexts are not made public")
     return db_context
+
+
+@router.get("/questions", response_model=List[DecisionContextRead])
+def list_decision_contexts(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """List all public decision contexts (excluding recursive ones)"""
+    stmt = (
+        select(DecisionContext)
+        .where(DecisionContext.parent_id.is_(None))  # Exclude recursive contexts
+        .order_by(DecisionContext.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    contexts = db.exec(stmt).all()
+    return contexts
+
+
+@router.get("/users/me/questions", response_model=List[DecisionContextRead])
+def list_current_user_decision_contexts(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """List current user's decision contexts (including recursive ones)"""
+    if current_user.buyer_profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not have a buyer profile",
+        )
+    
+    stmt = (
+        select(DecisionContext)
+        .where(DecisionContext.buyer_id == current_user.id)
+        .order_by(DecisionContext.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    contexts = db.exec(stmt).all()
+    return contexts
+
+
+@router.get("/users/{user_id}/questions", response_model=List[DecisionContextRead])
+def list_user_decision_contexts(
+    user_id: int,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """List decision contexts by specific user (excluding recursive ones)"""
+    stmt = (
+        select(DecisionContext)
+        .where(DecisionContext.buyer_id == user_id)
+        .where(DecisionContext.parent_id.is_(None))  # Exclude recursive contexts
+        .order_by(DecisionContext.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    contexts = db.exec(stmt).all()
+    return contexts
 
 
 

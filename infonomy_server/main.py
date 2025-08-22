@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from sqlmodel import Session, select
 from infonomy_server.database import create_db_and_tables, get_db
-from infonomy_server.models import User
-from infonomy_server.schemas import UserCreate, UserRead, UserUpdate
+from infonomy_server.models import User, InfoOffer, DecisionContext
+from infonomy_server.schemas import UserRead, UserCreate, UserUpdate
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
 from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
+from typing import List
 
 app = FastAPI(title="Q&A Platform API", version="1.0.0")
 
@@ -51,34 +52,252 @@ app.include_router(inbox.router)
 app.include_router(bot_sellers.router)
 app.include_router(profiles.router)
 
-# # User Endpoints
+# User Endpoints
 
 @app.get("/users/", response_model=list[UserRead], tags=["users"])
 def get_users(db: Session = Depends(get_db)):
     db_users = db.exec(select(User)).all()
     return db_users
 
-# @app.post("/users/", response_model=UserResponse)
-# def create_user(user: UserCreate, db: Session = Depends(get_db)):
-#     #check if user already exists
-#     existing_user = db.exec(select(User).where(User.username == user.username)).first()
-#     if existing_user:
-#         raise HTTPException(status_code=400, detail="Username already exists")
+
+@app.get("/users/me", response_model=UserRead, tags=["users"])
+def get_current_user(
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user profile"""
+    return current_user
+
+
+@app.put("/users/me", response_model=UserRead, tags=["users"])
+def update_current_user(
+    user_updates: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Update current user profile"""
+    for k, v in user_updates.dict(exclude_unset=True).items():
+        setattr(current_user, k, v)
     
-#     db_user = User(
-#         username = user.username,
-#         email = user.email,
-#         hashed_password = user.password,  # In a real application, hash the password
-#     )
-#     db.add(db_user)
-#     db.commit()
-#     db.refresh(db_user)
-#     return db_user
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
-# @app.get("/users/{user_id}", response_model=UserResponse)
-# def get_user(user_id: int, db: Session = Depends(get_db)):
-#     user = db.get(User, user_id)
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
-#     return user
+@app.get("/users/{user_id}", response_model=UserRead, tags=["users"])
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get public user profile by ID"""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@app.get("/users/me/purchases", tags=["users"])
+def get_current_user_purchases(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user's purchase history"""
+    if not current_user.buyer_profile:
+        raise HTTPException(
+            status_code=400, 
+            detail="User does not have a buyer profile"
+        )
+    
+    # Get all purchased info offers for the current user
+    purchased_offers = db.exec(
+        select(InfoOffer)
+        .join(DecisionContext, InfoOffer.context_id == DecisionContext.id)
+        .where(DecisionContext.buyer_id == current_user.id)
+        .where(InfoOffer.purchased == True)
+        .order_by(InfoOffer.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    ).all()
+    
+    return {
+        "purchases": [
+            {
+                "offer_id": offer.id,
+                "context_id": offer.context_id,
+                "seller_id": offer.seller_id,
+                "seller_type": offer.seller_type,
+                "price": offer.price,
+                "purchased_at": offer.created_at,  # Using created_at as proxy for purchase time
+                "context_query": offer.context.query if offer.context else None,
+            }
+            for offer in purchased_offers
+        ],
+        "total": len(purchased_offers),
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@app.get("/users/me/sales", tags=["users"])
+def get_current_user_sales(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user's sales history"""
+    # Check if user has any seller profiles
+    human_seller = current_user.seller_profile
+    bot_sellers = current_user.bot_sellers
+    
+    if not human_seller and not bot_sellers:
+        raise HTTPException(
+            status_code=400, 
+            detail="User does not have a seller profile"
+        )
+    
+    # Collect all sold offers from both HumanSeller and BotSellers
+    sold_offers = []
+    
+    if human_seller:
+        human_sales = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.seller_id == human_seller.user_id)
+            .where(InfoOffer.seller_type == "human_seller")
+            .where(InfoOffer.purchased == True)
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+        sold_offers.extend(human_sales)
+    
+    if bot_sellers:
+        bot_seller_ids = [bs.id for bs in bot_sellers]
+        bot_sales = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.seller_id.in_(bot_seller_ids))
+            .where(InfoOffer.seller_type == "bot_seller")
+            .where(InfoOffer.purchased == True)
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+        sold_offers.extend(bot_sales)
+    
+    # Sort by creation date and apply pagination
+    sold_offers.sort(key=lambda x: x.created_at, reverse=True)
+    paginated_sales = sold_offers[skip:skip + limit]
+    
+    return {
+        "sales": [
+            {
+                "offer_id": offer.id,
+                "context_id": offer.context_id,
+                "seller_id": offer.seller_id,
+                "seller_type": offer.seller_type,
+                "price": offer.price,
+                "sold_at": offer.created_at,  # Using created_at as proxy for sale time
+                "context_query": offer.context.query if offer.context else None,
+            }
+            for offer in paginated_sales
+        ],
+        "total": len(sold_offers),
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@app.get("/transactions", tags=["users"])
+def get_transactions(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Get all transactions (purchases and sales) for the current user"""
+    if not current_user.buyer_profile and not current_user.seller_profile and not current_user.bot_sellers:
+        raise HTTPException(
+            status_code=400, 
+            detail="User does not have any profiles"
+        )
+    
+    # Get purchases
+    purchases = []
+    if current_user.buyer_profile:
+        purchased_offers = db.exec(
+            select(InfoOffer)
+            .join(DecisionContext, InfoOffer.context_id == DecisionContext.id)
+            .where(DecisionContext.buyer_id == current_user.id)
+            .where(InfoOffer.purchased == True)
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+        
+        purchases = [
+            {
+                "type": "purchase",
+                "offer_id": offer.id,
+                "context_id": offer.context_id,
+                "seller_id": offer.seller_id,
+                "seller_type": offer.seller_type,
+                "amount": -offer.price,  # Negative for purchases
+                "timestamp": offer.created_at,
+                "context_query": offer.context.query if offer.context else None,
+            }
+            for offer in purchased_offers
+        ]
+    
+    # Get sales
+    sales = []
+    if current_user.seller_profile or current_user.bot_sellers:
+        sold_offers = []
+        
+        if current_user.seller_profile:
+            human_sales = db.exec(
+                select(InfoOffer)
+                .where(InfoOffer.seller_id == current_user.seller_profile.user_id)
+                .where(InfoOffer.seller_type == "human_seller")
+                .where(InfoOffer.purchased == True)
+                .order_by(InfoOffer.created_at.desc())
+            ).all()
+            sold_offers.extend(human_sales)
+        
+        if current_user.bot_sellers:
+            bot_seller_ids = [bs.id for bs in current_user.bot_sellers]
+            bot_sales = db.exec(
+                select(InfoOffer)
+                .where(InfoOffer.seller_id.in_(bot_seller_ids))
+                .where(InfoOffer.seller_type == "bot_seller")
+                .where(InfoOffer.purchased == True)
+                .order_by(InfoOffer.created_at.desc())
+            ).all()
+            sold_offers.extend(bot_sales)
+        
+        sales = [
+            {
+                "type": "sale",
+                "offer_id": offer.id,
+                "context_id": offer.context_id,
+                "buyer_id": offer.context.buyer_id if offer.context else None,
+                "amount": offer.price,  # Positive for sales
+                "timestamp": offer.created_at,
+                "context_query": offer.context.query if offer.context else None,
+            }
+            for offer in sold_offers
+        ]
+    
+    # Combine and sort all transactions
+    all_transactions = purchases + sales
+    all_transactions.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    # Apply pagination
+    paginated_transactions = all_transactions[skip:skip + limit]
+    
+    return {
+        "transactions": paginated_transactions,
+        "total": len(all_transactions),
+        "skip": skip,
+        "limit": limit,
+        "summary": {
+            "total_purchases": len(purchases),
+            "total_sales": len(sales),
+            "net_amount": sum(t["amount"] for t in all_transactions)
+        }
+    }

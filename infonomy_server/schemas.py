@@ -98,8 +98,13 @@ class SellerRead(SQLModel):
 #     # type: Optional[str] = None # this will automatically be set depending on the endpoint used
 #     matchers: Optional[List[SellerMatcherUpdate]] = None
 
-class HumanSellerRead(SellerRead):
+class HumanSellerRead(SQLModel):
+    id: int
     user_id: int
+    matchers: List[SellerMatcherRead]
+
+    class Config:
+        orm_mode = True
 
 # class HumanSellerCreate(SellerCreate):
 #     pass

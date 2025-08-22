@@ -1,6 +1,6 @@
 from typing import Union, List
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlmodel import Session, select
 from infonomy_server.database import get_db
 from infonomy_server.models import (
@@ -8,6 +8,8 @@ from infonomy_server.models import (
     DecisionContext,
     InfoOffer,
     MatcherInbox,
+    HumanSeller,
+    BotSeller,
 )
 from infonomy_server.schemas import (
     InfoOfferReadPrivate,
@@ -52,7 +54,7 @@ def create_info_offer(
     db.commit()
     db.refresh(offer)
 
-    # 4) Mark any matching inbox items as “responded”
+    # 4) Mark any matching inbox items as "responded"
     matcher_ids = [m.id for m in human_seller.matchers]
     inbox_items = db.exec(
         select(MatcherInbox)
@@ -97,7 +99,7 @@ def update_info_offer(
     db.commit()
     db.refresh(offer)
 
-    # 4) Ensure the inbox remains “responded”
+    # 4) Ensure the inbox remains "responded"
     matcher_ids = [m.id for m in human_seller.matchers]
     inbox_items = db.exec(
         select(MatcherInbox)
@@ -138,7 +140,7 @@ def delete_info_offer(
     db.delete(offer)
     db.commit()
 
-    # 4) Mark the context back to “new” in the inbox so the seller can reconsider
+    # 4) Mark the context back to "new" in the inbox so the seller can reconsider
     matcher_ids = [m.id for m in human_seller.matchers]
     inbox_items = db.exec(
         select(MatcherInbox)
@@ -214,3 +216,109 @@ def read_info_offers_for_decision_context(
             result.append(InfoOfferReadPublic.from_orm(offer))
 
     return result
+
+
+@router.get(
+    "/users/me/answers",
+    response_model=List[InfoOfferReadPrivate],
+)
+def list_current_user_info_offers(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """List current user's info offers (with private info)"""
+    # Check if user has a seller profile (HumanSeller or BotSeller)
+    human_seller = current_user.seller_profile
+    bot_sellers = current_user.bot_sellers
+    
+    if not human_seller and not bot_sellers:
+        raise HTTPException(
+            status_code=400, 
+            detail="User does not have a seller profile"
+        )
+    
+    # Collect all offers from both HumanSeller and BotSellers
+    offers = []
+    
+    if human_seller:
+        human_offers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.seller_id == human_seller.user_id)
+            .where(InfoOffer.seller_type == "human_seller")
+            .order_by(InfoOffer.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        ).all()
+        offers.extend(human_offers)
+    
+    if bot_sellers:
+        bot_seller_ids = [bs.id for bs in bot_sellers]
+        bot_offers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.seller_id.in_(bot_seller_ids))
+            .where(InfoOffer.seller_type == "bot_seller")
+            .order_by(InfoOffer.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        ).all()
+        offers.extend(bot_offers)
+    
+    # Sort by creation date and apply pagination
+    offers.sort(key=lambda x: x.created_at, reverse=True)
+    return offers[skip:skip + limit]
+
+
+@router.get(
+    "/users/{user_id}/answers",
+    response_model=List[InfoOfferReadPublic],
+)
+def list_user_info_offers(
+    user_id: int,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """List info offers by specific user (public view only)"""
+    # Check if the user has any seller profiles
+    human_seller = db.exec(
+        select(HumanSeller).where(HumanSeller.user_id == user_id)
+    ).first()
+    
+    bot_sellers = db.exec(
+        select(BotSeller).where(BotSeller.user_id == user_id)
+    ).all()
+    
+    if not human_seller and not bot_sellers:
+        raise HTTPException(status_code=404, detail="User does not have a seller profile")
+    
+    # Collect all offers from both HumanSeller and BotSellers
+    offers = []
+    
+    if human_seller:
+        human_offers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.seller_id == human_seller.user_id)
+            .where(InfoOffer.seller_type == "human_seller")
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+        offers.extend(human_offers)
+    
+    if bot_sellers:
+        bot_seller_ids = [bs.id for bs in bot_sellers]
+        bot_offers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.seller_id.in_(bot_seller_ids))
+            .where(InfoOffer.seller_type == "bot_seller")
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+        offers.extend(bot_offers)
+    
+    # Sort by creation date and apply pagination
+    offers.sort(key=lambda x: x.created_at, reverse=True)
+    paginated_offers = offers[skip:skip + limit]
+    
+    # Return public view for all offers
+    return [InfoOfferReadPublic.from_orm(offer) for offer in paginated_offers]
