@@ -17,6 +17,11 @@ from infonomy_server.schemas import (
 )
 from infonomy_server.auth import current_active_user
 from typing import List
+from infonomy_server.utils import (
+    get_context_for_buyer, 
+    recompute_inbox_for_matcher, 
+    remove_matcher_from_inboxes
+)
 
 router = APIRouter(tags=["profiles"])
 
@@ -120,6 +125,10 @@ def create_human_seller_matcher(
     db.add(db_matcher)
     db.commit()
     db.refresh(db_matcher)
+    
+    # Recompute inbox for this new matcher
+    recompute_inbox_for_matcher(db_matcher, db)
+    
     return db_matcher
 
 
@@ -169,6 +178,10 @@ def update_human_seller_matcher(
     db.add(db_matcher)
     db.commit()
     db.refresh(db_matcher)
+    
+    # Recompute inbox for this updated matcher
+    recompute_inbox_for_matcher(db_matcher, db)
+    
     return db_matcher
 
 
@@ -190,6 +203,9 @@ def delete_human_seller_matcher(
         raise HTTPException(status_code=404, detail="Matcher not found")
     if db_matcher.seller_id != human_seller.id or db_matcher.seller_type != "human_seller":
         raise HTTPException(status_code=404, detail="Matcher not found for this HumanSeller")
+    
+    # Remove all inbox items for this matcher before deleting it
+    remove_matcher_from_inboxes(matcher_id, db)
     
     db.delete(db_matcher)
     db.commit()

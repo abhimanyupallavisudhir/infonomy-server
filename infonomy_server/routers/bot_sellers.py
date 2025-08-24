@@ -16,6 +16,10 @@ from infonomy_server.schemas import (
 )
 from infonomy_server.auth import current_active_user
 from typing import List
+from infonomy_server.utils import (
+    recompute_inbox_for_matcher, 
+    remove_matcher_from_inboxes
+)
 
 router = APIRouter(prefix="/bot-sellers", tags=["bot-sellers"])
 
@@ -138,6 +142,10 @@ def create_bot_seller_matcher(
     db.add(db_matcher)
     db.commit()
     db.refresh(db_matcher)
+    
+    # Recompute inbox for this new matcher
+    recompute_inbox_for_matcher(db_matcher, db)
+    
     return db_matcher
 
 @router.get("/{bot_seller_id}/matchers", response_model=List[SellerMatcherRead])
@@ -187,6 +195,10 @@ def update_bot_seller_matcher(
     db.add(db_matcher)
     db.commit()
     db.refresh(db_matcher)
+    
+    # Recompute inbox for this updated matcher
+    recompute_inbox_for_matcher(db_matcher, db)
+    
     return db_matcher
 
 @router.delete("/{bot_seller_id}/matchers/{matcher_id}")
@@ -208,6 +220,9 @@ def delete_bot_seller_matcher(
         raise HTTPException(status_code=404, detail="Matcher not found")
     if db_matcher.seller_id != bot_seller_id or db_matcher.seller_type != "bot_seller":
         raise HTTPException(status_code=404, detail="Matcher not found for this BotSeller")
+    
+    # Remove all inbox items for this matcher before deleting it
+    remove_matcher_from_inboxes(matcher_id, db)
     
     db.delete(db_matcher)
     db.commit()
