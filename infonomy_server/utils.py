@@ -140,6 +140,12 @@ def recompute_inbox_for_matcher(matcher: SellerMatcher, db: Session):
             if not any(p in pages for p in matcher.context_pages):
                 continue
                 
+        # age limit check (CRITICAL: was missing!)
+        if matcher.age_limit is not None:
+            age_seconds = (datetime.utcnow() - ctx.created_at).total_seconds()
+            if age_seconds > matcher.age_limit:
+                continue
+                
         # Create inbox item
         now = datetime.utcnow()
         new_items.append(
