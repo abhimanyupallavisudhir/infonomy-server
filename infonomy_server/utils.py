@@ -381,3 +381,93 @@ def optimize_matcher_performance(db: Session):
         "orphaned_context_items_removed": orphaned_context_count
     }
 
+
+def increment_buyer_query_counter(buyer: HumanBuyer, priority: int, db: Session):
+    """
+    Increment the num_queries counter for a specific priority level.
+    This is called when a buyer creates a new DecisionContext.
+    """
+    if buyer.num_queries is None:
+        buyer.num_queries = {}
+    
+    buyer.num_queries[priority] = buyer.num_queries.get(priority, 0) + 1
+    db.add(buyer)
+    db.commit()
+
+
+def increment_buyer_inspected_counter(buyer: HumanBuyer, priority: int, db: Session):
+    """
+    Increment the num_inspected counter for a specific priority level.
+    This is called when a buyer inspects InfoOffers for a DecisionContext.
+    
+    IMPORTANT: This should only be called for the ORIGINAL DecisionContext (depth=0),
+    not for recursive child contexts. The inspection task handles this automatically.
+    """
+    if buyer.num_inspected is None:
+        buyer.num_inspected = {}
+    
+    buyer.num_inspected[priority] = buyer.num_inspected.get(priority, 0) + 1
+    db.add(buyer)
+    db.commit()
+
+
+def increment_buyer_purchased_counter(buyer: HumanBuyer, priority: int, db: Session):
+    """
+    Increment the num_purchased counter for a specific priority level.
+    This is called when a buyer purchases InfoOffers for a DecisionContext.
+    
+    IMPORTANT: This should only be called for the ORIGINAL DecisionContext (depth=0),
+    not for recursive child contexts. The inspection task handles this automatically.
+    """
+    if buyer.num_purchased is None:
+        buyer.num_purchased = {}
+    
+    buyer.num_purchased[priority] = buyer.num_purchased.get(priority, 0) + 1
+    db.add(buyer)
+    db.commit()
+
+
+def get_buyer_stats_summary(buyer: HumanBuyer) -> dict:
+    """
+    Get a summary of the buyer's statistics across all priority levels.
+    """
+    if not buyer.num_queries:
+        return {
+            "total_queries": 0,
+            "total_inspected": 0,
+            "total_purchased": 0,
+            "overall_inspection_rate": 0.0,
+            "overall_purchase_rate": 0.0,
+            "by_priority": {}
+        }
+    
+    total_queries = sum(buyer.num_queries.values())
+    total_inspected = sum(buyer.num_inspected.values()) if buyer.num_inspected else 0
+    total_purchased = sum(buyer.num_purchased.values()) if buyer.num_purchased else 0
+    
+    overall_inspection_rate = total_inspected / total_queries if total_queries > 0 else 0.0
+    overall_purchase_rate = total_purchased / total_queries if total_queries > 0 else 0.0
+    
+    by_priority = {}
+    for priority in buyer.num_queries.keys():
+        queries = buyer.num_queries.get(priority, 0)
+        inspected = buyer.num_inspected.get(priority, 0) if buyer.num_inspected else 0
+        purchased = buyer.num_purchased.get(priority, 0) if buyer.num_purchased else 0
+        
+        by_priority[priority] = {
+            "queries": queries,
+            "inspected": inspected,
+            "purchased": purchased,
+            "inspection_rate": inspected / queries if queries > 0 else 0.0,
+            "purchase_rate": purchased / queries if queries > 0 else 0.0
+        }
+    
+    return {
+        "total_queries": total_queries,
+        "total_inspected": total_inspected,
+        "total_purchased": total_purchased,
+        "overall_inspection_rate": overall_inspection_rate,
+        "overall_purchase_rate": overall_purchase_rate,
+        "by_priority": by_priority
+    }
+

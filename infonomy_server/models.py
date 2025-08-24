@@ -98,12 +98,12 @@ class HumanBuyer(SQLModel, table=True):
     num_inspected: dict[int, int] = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),
-        description="Number of queries where an inspection was done by the buyer, by priority",
+        description="Number of inspections by the buyer, by priority",
     )
     num_purchased: dict[int, int] = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),
-        description="Number of queries where a purchase was made by the buyer, by priority",
+        description="Number of purchases by the buyer, by priority",
     )
     @property
     def inspection_rate(self) -> dict[int, float]:

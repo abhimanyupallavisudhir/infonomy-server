@@ -13,7 +13,11 @@ from infonomy_server.schemas import (
     DecisionContextUpdateNonRecursive,
 )
 from infonomy_server.auth import current_active_user
-from infonomy_server.utils import get_context_for_buyer, recompute_inbox_for_context
+from infonomy_server.utils import (
+    get_context_for_buyer,
+    recompute_inbox_for_context,
+    increment_buyer_query_counter
+)
 from typing import List, Optional
 
 router = APIRouter(tags=["decision_contexts"])
@@ -41,6 +45,9 @@ def create_decision_context(
     db.add(ctx)
     db.commit()
     db.refresh(ctx)
+
+    # Increment the buyer's query counter for this priority level
+    increment_buyer_query_counter(current_user.buyer_profile, ctx.priority, db)
 
     # populate inbox for this new context
     recompute_inbox_for_context(ctx, db)

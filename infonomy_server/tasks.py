@@ -5,7 +5,11 @@ from celery import shared_task
 from sqlmodel import Session, select
 
 from infonomy_server.database import engine
-from infonomy_server.utils import recompute_inbox_for_context  # your existing matcher helper
+from infonomy_server.utils import (
+    recompute_inbox_for_context,
+    increment_buyer_inspected_counter,
+    increment_buyer_purchased_counter
+)
 from infonomy_server.llm import call_llm, completion  # your wrapper around the child‐LLM
 from infonomy_server.models import (
     DecisionContext,
@@ -268,12 +272,25 @@ def inspect_task(
     for offer in offers:
         offer.inspected = True
 
+    # Increment the buyer's inspected counter for this priority level
+    # Only increment once per context, not per offer
+    # AND only for the original context (depth=0), not recursive child contexts
+    if depth == 0:
+        increment_buyer_inspected_counter(buyer, ctx.priority, session)
+
     # 3a) If LLM picked any offers → "buy" them
     if chosen_ids:
         for oid in chosen_ids:
             off = session.get(InfoOffer, oid)
             off.purchased = True
         purchased.extend(chosen_ids)
+        
+        # Increment the buyer's purchased counter for this priority level
+        # Only increment once per context, not per offer
+        # AND only for the original context (depth=0), not recursive child contexts
+        if depth == 0:
+            increment_buyer_purchased_counter(buyer, ctx.priority, session)
+        
         # # remove those offers from future consideration
         # session.exec(
         #     select(InfoOffer).where(InfoOffer.id.in_(chosen_ids))

@@ -24,7 +24,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] budget enforcement
 - [x] implement BotSellers and make sure recursive decision contexts are only visible to bots, sellers who provided original, buyer who's already bought the inspected decision contexts
 - [x] add remaining important methods: matcher CRUD, list decision contexts, list decision contexts by user, list InfoOffers by user, 
-- [ ] make sure inboxes are updated upon creation of new matchers, sellers or botsellers
+- [x] make sure inboxes are updated upon creation of new matchers, sellers or botsellers
 - [ ] make sure rates are correctly counted and maintained
 - [ ] let users put their API keys
 - [ ] payments and balances

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select
 from infonomy_server.database import get_db
 from infonomy_server.models import (
@@ -20,7 +20,8 @@ from typing import List
 from infonomy_server.utils import (
     get_context_for_buyer, 
     recompute_inbox_for_matcher, 
-    remove_matcher_from_inboxes
+    remove_matcher_from_inboxes,
+    get_buyer_stats_summary
 )
 
 router = APIRouter(tags=["profiles"])
@@ -210,4 +211,47 @@ def delete_human_seller_matcher(
     db.delete(db_matcher)
     db.commit()
     return {"message": "Matcher deleted successfully"}
+
+
+@router.get("/buyers/me/stats")
+def get_current_buyer_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user's buyer statistics"""
+    if current_user.buyer_profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User does not have a buyer profile",
+        )
+    
+    stats = get_buyer_stats_summary(current_user.buyer_profile)
+    return stats
+
+
+@router.get("/buyers/{user_id}/stats")
+def get_buyer_stats_by_id(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Get buyer statistics for a specific user (admin access)"""
+    # Check if current user is requesting their own stats or has admin access
+    if user_id != current_user.id:
+        # In a real application, you might want to check admin permissions here
+        # For now, we'll allow users to see their own stats only
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only view your own statistics",
+        )
+    
+    user = db.get(User, user_id)
+    if not user or user.buyer_profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User or buyer profile not found",
+        )
+    
+    stats = get_buyer_stats_summary(user.buyer_profile)
+    return stats
 
