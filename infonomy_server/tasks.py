@@ -194,16 +194,32 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
             public_info: str
             price: float
         
-        # Use instructor pattern for structured output
+        # Get the user to use their API keys
+        from infonomy_server.database import engine
+        from sqlmodel import Session
+        from infonomy_server.models import User
+        
+        session = Session(engine)
+        try:
+            user = session.get(User, bot_seller.user_id)
+        finally:
+            session.close()
+        
+        # Use user's API keys if available, otherwise fall back to server defaults
+        api_keys = user.api_keys if user and user.api_keys else {}
+        
+        # Import the context manager and use it
+        from infonomy_server.utils import temporary_api_keys
         from infonomy_server.llm import CLIENT
         
-        response = CLIENT.chat.completions.create(
-            model=bot_seller.llm_model,
-            response_model=BotSellerResponse,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=DEFAULT_LLM_MAX_TOKENS,
-            temperature=DEFAULT_LLM_TEMPERATURE
-        )
+        with temporary_api_keys(api_keys):
+            response = CLIENT.chat.completions.create(
+                model=bot_seller.llm_model,
+                response_model=BotSellerResponse,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=DEFAULT_LLM_MAX_TOKENS,
+                temperature=DEFAULT_LLM_TEMPERATURE
+            )
         
         return response.private_info, response.public_info, response.price
         
