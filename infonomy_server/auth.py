@@ -40,7 +40,7 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
         print(f"Verification requested for user {user.id}. Verification token: {token}")
 
     async def on_after_login(
-        self, user: User, request: Optional[Request] = None
+        self, user: User, request: Optional[Request] = None, response=None
     ):
         """Process daily login bonus when user logs in"""
         from infonomy_server.utils import process_daily_login_bonus

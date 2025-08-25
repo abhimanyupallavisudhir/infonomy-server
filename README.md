@@ -13,7 +13,7 @@ To start the server:
 ```python
 redis-server
 celery -A celery_app worker --loglevel=info
-fastapi dev main.py
+fastapi dev infonomy_server/main.py
 ```
 
 You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/infonomy-client) library to make requests to the server.
@@ -26,7 +26,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] add remaining important methods: matcher CRUD, list decision contexts, list decision contexts by user, list InfoOffers by user, 
 - [x] make sure inboxes are updated upon creation of new matchers, sellers or botsellers
 - [x] make sure rates are correctly counted and maintained
-- [ ] let users put their API keys
+- [x] let users put their API keys
 - [x] balances
 - [ ] payments
 
