@@ -26,6 +26,7 @@ class User(SQLModelBaseUserDB, table=True):
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
     balance: float = Field(default=0.0)
+    available_balance: float = Field(default=0.0, description="Available balance for creating DecisionContexts")
 
     # Relationships
     buyer_profile: Optional["HumanBuyer"] = Relationship(
@@ -98,12 +99,12 @@ class HumanBuyer(SQLModel, table=True):
     num_inspected: dict[int, int] = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),
-        description="Number of inspections by the buyer, by priority",
+        description="Number of queries where at least one InfoOffer was inspected by the buyer, by priority",
     )
     num_purchased: dict[int, int] = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),
-        description="Number of purchases by the buyer, by priority",
+        description="Number of queries where at least one InfoOffer was purchased by the buyer, by priority",
     )
     @property
     def inspection_rate(self) -> dict[int, float]:

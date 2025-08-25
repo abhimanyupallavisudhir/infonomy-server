@@ -18,6 +18,7 @@ from infonomy_server.models import (
     SellerMatcher,
     MatcherInbox,
     BotSeller,
+    User,
 )
 
 
@@ -235,143 +236,192 @@ def inspect_task(
     if purchased is None:
         purchased = []
     
-    if depth >= max_depth or breadth >= max_breadth:
-        return purchased
-    
     session = Session(engine)
+    
+    try:
+        if depth >= max_depth or breadth >= max_breadth:
+            # If this is a top-level context and we're hitting limits, restore the max_budget to available_balance
+            if depth == 0:
+                # Load context & buyer to get the max_budget
+                ctx = session.get(DecisionContext, context_id)
+                buyer = session.get(HumanBuyer, buyer_id)
+                if ctx and buyer:
+                    user = session.get(User, buyer.user_id)
+                    if user:
+                        # Restore the max_budget to available_balance since no purchases were made
+                        user.available_balance += ctx.max_budget
+                        session.add(user)
+                        session.commit()
+            
+            return purchased
 
-    # Load context & buyer
-    ctx = session.get(DecisionContext, context_id)
-    buyer = session.get(HumanBuyer, buyer_id)
+        # Load context & buyer
+        ctx = session.get(DecisionContext, context_id)
+        buyer = session.get(HumanBuyer, buyer_id)
+        if not ctx or not buyer:
+            return purchased or []
 
-    # 1) Fetch all available InfoOffers for this ctx
-    # not sure about whether we should let them re-inspect inspected offers
-    # but for now we do not TODO
-    offers: List[InfoOffer] = session.exec(
-        select(InfoOffer)
-        .where(InfoOffer.context_id == context_id)
-        .where(InfoOffer.purchased == False)
-        .where(InfoOffer.inspected == False)
-    ).all()
+        # 1) Fetch all available InfoOffers for this ctx
+        # not sure about whether we should let them re-inspect inspected offers
+        # but for now we do not TODO
+        offers: List[InfoOffer] = session.exec(
+            select(InfoOffer)
+            .where(InfoOffer.context_id == context_id)
+            .where(InfoOffer.purchased == False)
+            .where(InfoOffer.inspected == False)
+        ).all()
 
-    if not offers:
-        # no more offers to inspect → finish
-        return purchased
+        if not offers:
+            # no more offers to inspect → finish
+            # If this is a top-level context and we're done, restore the max_budget to available_balance
+            if depth == 0:
+                user = session.get(User, buyer.user_id)
+                if user:
+                    # Restore the max_budget to available_balance since no purchases were made
+                    user.available_balance += ctx.max_budget
+                    session.add(user)
+                    session.commit()
+            
+            return purchased
 
-    # just for the LLM
-    known_info: List[InfoOffer] = []
-    for p in purchased:
-        off = session.get(InfoOffer, p)
-        if off:
-            known_info.append(off)
+        # just for the LLM
+        known_info: List[InfoOffer] = []
+        for p in purchased:
+            off = session.get(InfoOffer, p)
+            if off:
+                known_info.append(off)
 
-    # 2) Invoke your LLM with full, private offer data
-    #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
-    chosen_ids, child_ctx = call_llm(context=ctx, offers=offers, known_info=known_info, buyer=buyer.default_child_llm)
+        # 2) Invoke your LLM with full, private offer data
+        #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
+        chosen_ids, child_ctx = call_llm(context=ctx, offers=offers, known_info=known_info, buyer=buyer.default_child_llm)
 
-    for offer in offers:
-        offer.inspected = True
+        for offer in offers:
+            offer.inspected = True
 
-    # Increment the buyer's inspected counter for this priority level
-    # Only increment once per context, not per offer
-    # AND only for the original context (depth=0), not recursive child contexts
-    if depth == 0:
-        increment_buyer_inspected_counter(buyer, ctx.priority, session)
-
-    # 3a) If LLM picked any offers → "buy" them
-    if chosen_ids:
-        for oid in chosen_ids:
-            off = session.get(InfoOffer, oid)
-            off.purchased = True
-        purchased.extend(chosen_ids)
-        
-        # Increment the buyer's purchased counter for this priority level
+        # Increment the buyer's inspected counter for this priority level
         # Only increment once per context, not per offer
         # AND only for the original context (depth=0), not recursive child contexts
         if depth == 0:
-            increment_buyer_purchased_counter(buyer, ctx.priority, session)
-        
-        # # remove those offers from future consideration
-        # session.exec(
-        #     select(InfoOffer).where(InfoOffer.id.in_(chosen_ids))
-        # ).scalars().delete(synchronize_session="fetch")
-        session.commit()
-        # recurse on the same context
-        return inspect_task(
-            context_id=context_id,
-            buyer_id=buyer_id,
-            purchased=purchased,
-            depth=depth,
-            breadth=breadth + 1,
-            max_depth=max_depth,
-            max_breadth=max_breadth,
-        )
+            increment_buyer_inspected_counter(buyer, ctx.priority, session)
 
-    # 3b) If LLM returned an empty list *but* wants more info
-    if child_ctx:
-        # create a new DecisionContext row
-        session.add(child_ctx)
-        session.commit()
-        session.refresh(child_ctx)
-
-        # notify sellers via your inbox‑recompute helper
-        recompute_inbox_for_context(child_ctx, session)
-
-        # Process BotSellers immediately
-        try:
-            process_bot_sellers_for_context.delay(child_ctx.id)
-        except Exception as e:
-            print(f"Warning: Failed to trigger BotSeller processing: {str(e)}")
-            # Continue with the inspection process even if BotSeller processing fails
-
-        # wait (poll) until InfoOffers appear with a time limit instead of count
-        start_time = time.time()
-        
-        try:
-            from infonomy_server.config import (
-                BOTSELLER_TIMEOUT_SECONDS,
-                BOTSELLER_MAX_WAIT_TIME,
-                BOTSELLER_POLL_INTERVAL_FAST,
-                BOTSELLER_POLL_INTERVAL_SLOW
+        # 3a) If LLM picked any offers → "buy" them
+        if chosen_ids:
+            for oid in chosen_ids:
+                off = session.get(InfoOffer, oid)
+                off.purchased = True
+            purchased.extend(chosen_ids)
+            
+            # Increment the buyer's purchased counter for this priority level
+            # Only increment once per context, not per offer
+            # AND only for the original context (depth=0), not recursive child contexts
+            if depth == 0:
+                increment_buyer_purchased_counter(buyer, ctx.priority, session)
+                
+                # Handle balance logic for top-level contexts only
+                # Get the user to update their balance
+                user = session.get(User, buyer.user_id)
+                if user:
+                    # Calculate total cost of purchased offers
+                    total_cost = sum(off.price for off in offers if off.id in chosen_ids)
+                    # Deduct from actual balance
+                    user.balance -= total_cost
+                    # Restore the max_budget to available_balance
+                    user.available_balance += ctx.max_budget
+                    session.add(user)
+            
+            # # remove those offers from future consideration
+            # session.exec(
+            #     select(InfoOffer).where(InfoOffer.id.in_(chosen_ids))
+            # ).scalars().delete(synchronize_session="fetch")
+            session.commit()
+            # recurse on the same context
+            return inspect_task(
+                context_id=context_id,
+                buyer_id=buyer_id,
+                purchased=purchased,
+                depth=depth,
+                breadth=breadth + 1,
+                max_depth=max_depth,
+                max_breadth=max_breadth,
             )
-        except ImportError:
-            # Fallback to default values if config is not available
-            BOTSELLER_TIMEOUT_SECONDS = 30
-            BOTSELLER_MAX_WAIT_TIME = 60
-            BOTSELLER_POLL_INTERVAL_FAST = 1
-            BOTSELLER_POLL_INTERVAL_SLOW = 3
-        
-        while True:
-            count = session.exec(
-                select(InfoOffer)
-                .where(InfoOffer.context_id == child_ctx.id)
-                .where(InfoOffer.purchased == False)
-            ).count()
-            
-            elapsed_time = time.time() - start_time
-            
-            # Stop waiting if we have offers or if timeout is reached
-            if count > 0 or elapsed_time > BOTSELLER_MAX_WAIT_TIME:
-                break
-            
-            # For BotSellers, we expect faster response, so check more frequently early on
-            if elapsed_time < BOTSELLER_TIMEOUT_SECONDS:
-                time.sleep(BOTSELLER_POLL_INTERVAL_FAST)  # Check every 1 second for BotSellers
-            else:
-                time.sleep(BOTSELLER_POLL_INTERVAL_SLOW)  # Check every 3 seconds for human sellers
-        
-        # recurse into the child context
-        # don't need to include a selection of the offers here,
-        # because again we are inspecting all offers
-        return inspect_task(
-            context_id=child_ctx.id,
-            buyer_id=buyer_id,
-            purchased=purchased,
-            depth=depth + 1,
-            breadth=breadth,
-            max_depth=max_depth,
-            max_breadth=max_breadth,
-        )
 
-    # 4) Nothing to buy and no child → we're done
-    return purchased
+        # 3b) If LLM returned an empty list *but* wants more info
+        if child_ctx:
+            # create a new DecisionContext row
+            session.add(child_ctx)
+            session.commit()
+            session.refresh(child_ctx)
+
+            # notify sellers via your inbox‑recompute helper
+            recompute_inbox_for_context(child_ctx, session)
+
+            # Process BotSellers immediately
+            try:
+                process_bot_sellers_for_context.delay(child_ctx.id)
+            except Exception as e:
+                print(f"Warning: Failed to trigger BotSeller processing: {str(e)}")
+                # Continue with the inspection process even if BotSeller processing fails
+
+            # wait (poll) until InfoOffers appear with a time limit instead of count
+            start_time = time.time()
+            
+            try:
+                from infonomy_server.config import (
+                    BOTSELLER_TIMEOUT_SECONDS,
+                    BOTSELLER_MAX_WAIT_TIME,
+                    BOTSELLER_POLL_INTERVAL_FAST,
+                    BOTSELLER_POLL_INTERVAL_SLOW
+                )
+            except ImportError:
+                # Fallback to default values if config is not available
+                BOTSELLER_TIMEOUT_SECONDS = 30
+                BOTSELLER_MAX_WAIT_TIME = 60
+                BOTSELLER_POLL_INTERVAL_FAST = 1
+                BOTSELLER_POLL_INTERVAL_SLOW = 3
+            
+            while True:
+                count = session.exec(
+                    select(InfoOffer)
+                    .where(InfoOffer.context_id == child_ctx.id)
+                    .where(InfoOffer.purchased == False)
+                ).count()
+                
+                elapsed_time = time.time() - start_time
+                
+                # Stop waiting if we have offers or if timeout is reached
+                if count > 0 or elapsed_time > BOTSELLER_MAX_WAIT_TIME:
+                    break
+                
+                # For BotSellers, we expect faster response, so check more frequently early on
+                if elapsed_time < BOTSELLER_TIMEOUT_SECONDS:
+                    time.sleep(BOTSELLER_POLL_INTERVAL_FAST)  # Check every 1 second for BotSellers
+                else:
+                    time.sleep(BOTSELLER_POLL_INTERVAL_SLOW)  # Check every 3 seconds for human sellers
+            
+            # recurse into the child context
+            # don't need to include a selection of the offers here,
+            # because again we are inspecting all offers
+            return inspect_task(
+                context_id=child_ctx.id,
+                buyer_id=buyer_id,
+                purchased=purchased,
+                depth=depth + 1,
+                breadth=breadth,
+                max_depth=max_depth,
+                max_breadth=max_breadth,
+            )
+
+        # 4) Nothing to buy and no child → we're done
+        # If this is a top-level context and we're done, restore the max_budget to available_balance
+        if depth == 0:
+            user = session.get(User, buyer.user_id)
+            if user:
+                # Restore the max_budget to available_balance since no purchases were made
+                user.available_balance += ctx.max_budget
+                session.add(user)
+                session.commit()
+        
+        return purchased
+        
+    finally:
+        session.close()

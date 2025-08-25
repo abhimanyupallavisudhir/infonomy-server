@@ -37,6 +37,18 @@ def create_decision_context(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User does not have a buyer profile",
         )
+    
+    # Validate max_budget against available_balance
+    if decision_context.max_budget > current_user.available_balance:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Max budget ({decision_context.max_budget}) exceeds available balance ({current_user.available_balance})",
+        )
+    
+    # Deduct max_budget from available_balance
+    current_user.available_balance -= decision_context.max_budget
+    db.add(current_user)
+    
     ctx = DecisionContext(
         **decision_context.dict(),
         buyer_id=current_user.id,
