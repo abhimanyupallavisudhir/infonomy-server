@@ -471,3 +471,47 @@ def get_buyer_stats_summary(buyer: HumanBuyer) -> dict:
         "by_priority": by_priority
     }
 
+
+def process_daily_login_bonus(user: User, db: Session) -> dict:
+    """
+    Process daily login bonus for a user.
+    
+    Args:
+        user: The user to process the bonus for
+        db: Database session
+        
+    Returns:
+        dict: Information about the bonus processing
+    """
+    import datetime
+    
+    today = datetime.date.today()
+    
+    # Check if user has already received a bonus today
+    if user.last_login_date == today:
+        return {
+            "bonus_awarded": False,
+            "message": "Daily bonus already received today",
+            "next_bonus_date": today + datetime.timedelta(days=1)
+        }
+    
+    # Award the daily bonus
+    bonus_amount = user.daily_bonus_amount
+    
+    # Update user's balances
+    user.balance += bonus_amount
+    user.available_balance += bonus_amount
+    user.last_login_date = today
+    
+    db.add(user)
+    db.commit()
+    
+    return {
+        "bonus_awarded": True,
+        "bonus_amount": bonus_amount,
+        "message": f"Daily bonus of {bonus_amount} awarded",
+        "new_balance": user.balance,
+        "new_available_balance": user.available_balance,
+        "next_bonus_date": today + datetime.timedelta(days=1)
+    }
+

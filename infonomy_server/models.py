@@ -27,6 +27,8 @@ class User(SQLModelBaseUserDB, table=True):
 
     balance: float = Field(default=0.0)
     available_balance: float = Field(default=0.0, description="Available balance for creating DecisionContexts")
+    last_login_date: Optional[datetime.date] = Field(default=None, description="Last date the user logged in")
+    daily_bonus_amount: float = Field(default=10.0, description="Amount of money given as daily login bonus")
 
     # Relationships
     buyer_profile: Optional["HumanBuyer"] = Relationship(

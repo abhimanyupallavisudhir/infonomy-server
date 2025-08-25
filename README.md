@@ -27,7 +27,8 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] make sure inboxes are updated upon creation of new matchers, sellers or botsellers
 - [x] make sure rates are correctly counted and maintained
 - [ ] let users put their API keys
-- [ ] payments and balances
+- [x] balances
+- [ ] payments
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing

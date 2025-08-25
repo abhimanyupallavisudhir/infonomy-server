@@ -39,6 +39,30 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
     ):
         print(f"Verification requested for user {user.id}. Verification token: {token}")
 
+    async def on_after_login(
+        self, user: User, request: Optional[Request] = None
+    ):
+        """Process daily login bonus when user logs in"""
+        from infonomy_server.utils import process_daily_login_bonus
+        from infonomy_server.database import engine
+        from sqlmodel import Session
+        
+        # Create a new session for processing the bonus
+        session = Session(engine)
+        try:
+            # Refresh user data from database
+            db_user = session.get(User, user.id)
+            if db_user:
+                bonus_result = process_daily_login_bonus(db_user, session)
+                if bonus_result["bonus_awarded"]:
+                    print(f"User {user.id} received daily bonus: {bonus_result['bonus_amount']}")
+                else:
+                    print(f"User {user.id} already received daily bonus today")
+        except Exception as e:
+            print(f"Error processing daily bonus for user {user.id}: {str(e)}")
+        finally:
+            session.close()
+
 async def get_user_db(session: Session = Depends(get_db)):
     yield SQLModelUserDatabase(session, User)
 

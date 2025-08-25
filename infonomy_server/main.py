@@ -301,3 +301,53 @@ def get_transactions(
             "net_amount": sum(t["amount"] for t in all_transactions)
         }
     }
+
+
+@app.get("/users/me/daily-bonus", tags=["users"])
+def get_daily_bonus_status(
+    current_user: User = Depends(current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get current user's daily bonus status"""
+    from infonomy_server.utils import process_daily_login_bonus
+    import datetime
+    
+    today = datetime.date.today()
+    
+    # Check if user has already received a bonus today
+    if current_user.last_login_date == today:
+        return {
+            "bonus_available": False,
+            "message": "Daily bonus already received today",
+            "last_bonus_date": current_user.last_login_date,
+            "next_bonus_date": today + datetime.timedelta(days=1),
+            "daily_bonus_amount": current_user.daily_bonus_amount,
+            "current_balance": current_user.balance,
+            "current_available_balance": current_user.available_balance
+        }
+    else:
+        return {
+            "bonus_available": True,
+            "message": "Daily bonus available",
+            "last_bonus_date": current_user.last_login_date,
+            "next_bonus_date": today,
+            "daily_bonus_amount": current_user.daily_bonus_amount,
+            "current_balance": current_user.balance,
+            "current_available_balance": current_user.available_balance
+        }
+
+
+@app.post("/users/me/daily-bonus", tags=["users"])
+def claim_daily_bonus(
+    current_user: User = Depends(current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Manually claim daily bonus (useful if automatic login bonus didn't work)"""
+    from infonomy_server.utils import process_daily_login_bonus
+    
+    bonus_result = process_daily_login_bonus(current_user, db)
+    
+    return {
+        "success": True,
+        "result": bonus_result
+    }
