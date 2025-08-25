@@ -2,7 +2,7 @@ from typing import List, Tuple, Optional
 import instructor
 from litellm import completion
 from pydantic import BaseModel, model_validator
-from infonomy_server.models import DecisionContext, InfoOffer, LLMBuyerType
+from infonomy_server.models import DecisionContext, InfoOffer, LLMBuyerType, User
 
 CLIENT = instructor.from_litellm(completion)
 
@@ -120,7 +120,8 @@ def call_llm(
     offers: List[InfoOffer],
     known_info: List[InfoOffer],
     buyer: LLMBuyerType,
-) -> Tuple[List[int], Optional[DecisionContext]]:
+    user: Optional["User"] = None,
+) -> Tuple[List[int], Optional["DecisionContext"]]:
     prompt = buyer.custom_prompt or INSTRUCTIONS
     used_budget = sum(io.price for io in known_info)
     messages = [
@@ -136,12 +137,20 @@ def call_llm(
     ]
     accept = False
     available_ids = set(io.id for io in offers)
+    
+    # Use user's API keys if available, otherwise fall back to server defaults
+    api_keys = user.api_keys if user and user.api_keys else {}
+    
+    # Import the context manager
+    from infonomy_server.utils import temporary_api_keys
+    
     while not accept:
-        response = CLIENT.chat.completions.create(
-            model=buyer.model,
-            response_model=LLMResponse,
-            messages=messages,
-        )
+        with temporary_api_keys(api_keys):
+            response = CLIENT.chat.completions.create(
+                model=buyer.model,
+                response_model=LLMResponse,
+                messages=messages,
+            )
         if response.chosen_offer_ids:
             # check that chosen IDs are a subset of available offers
             chosen_ids = set(response.chosen_offer_ids)

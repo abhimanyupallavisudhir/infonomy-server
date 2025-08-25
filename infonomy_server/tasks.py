@@ -293,7 +293,17 @@ def inspect_task(
 
         # 2) Invoke your LLM with full, private offer data
         #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
-        chosen_ids, child_ctx = call_llm(context=ctx, offers=offers, known_info=known_info, buyer=buyer.default_child_llm)
+        
+        # Get the user to pass their API keys to the LLM
+        user = session.get(User, buyer.user_id)
+        
+        chosen_ids, child_ctx = call_llm(
+            context=ctx, 
+            offers=offers, 
+            known_info=known_info, 
+            buyer=buyer.default_child_llm,
+            user=user
+        )
 
         for offer in offers:
             offer.inspected = True

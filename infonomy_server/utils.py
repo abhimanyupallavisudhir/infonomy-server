@@ -12,6 +12,8 @@ from infonomy_server.models import (
     BotSeller,
 )
 from infonomy_server.auth import current_active_user
+import os
+from contextlib import contextmanager
 
 def get_context_for_buyer(
     context_id: int,
@@ -514,4 +516,45 @@ def process_daily_login_bonus(user: User, db: Session) -> dict:
         "new_available_balance": user.available_balance,
         "next_bonus_date": today + datetime.timedelta(days=1)
     }
+
+
+@contextmanager
+def temporary_api_keys(api_keys: dict):
+    """
+    Context manager to temporarily set API keys in environment variables.
+    
+    Args:
+        api_keys: Dictionary of API key names and values
+        
+    Yields:
+        None
+        
+    Example:
+        with temporary_api_keys({"OPENAI_API_KEY": "sk-..."}):
+            # API keys are set in environment
+            make_llm_call()
+        # API keys are automatically cleared
+    """
+    # Store original values
+    original_values = {}
+    
+    try:
+        # Set new API keys
+        for key_name, key_value in api_keys.items():
+            if key_value:  # Only set non-empty values
+                original_values[key_name] = os.environ.get(key_name)
+                os.environ[key_name] = key_value
+        
+        yield
+        
+    finally:
+        # Restore original values
+        for key_name in api_keys.keys():
+            if key_name in original_values:
+                if original_values[key_name] is None:
+                    # Remove the key if it wasn't set originally
+                    os.environ.pop(key_name, None)
+                else:
+                    # Restore the original value
+                    os.environ[key_name] = original_values[key_name]
 

@@ -351,3 +351,39 @@ def claim_daily_bonus(
         "success": True,
         "result": bonus_result
     }
+
+
+@app.put("/users/me/api-keys", tags=["users"])
+def update_api_keys(
+    api_keys: dict,
+    current_user: User = Depends(current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Update current user's API keys for LLM services"""
+    
+    # Update user's API keys (no validation - users can provide any dict)
+    current_user.api_keys = api_keys
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    
+    return {
+        "success": True,
+        "message": "API keys updated successfully",
+        "api_keys": current_user.api_keys
+    }
+
+
+@app.get("/users/me/api-keys", tags=["users"])
+def get_api_keys(
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user's API keys (only key names, not values for security)"""
+    
+    # Return only the names of configured API keys, not the actual values
+    configured_keys = list(current_user.api_keys.keys()) if current_user.api_keys else []
+    
+    return {
+        "configured_api_keys": configured_keys,
+        "total_keys": len(configured_keys)
+    }

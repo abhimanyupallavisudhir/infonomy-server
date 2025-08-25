@@ -9,6 +9,7 @@ from infonomy_server.models import LLMBuyerType
 class UserRead(schemas.BaseUser[int]):
     username: str
     created_at: datetime
+    api_keys: Optional[dict] = None
 
 class UserCreate(schemas.BaseUserCreate):
     username: str
@@ -17,6 +18,7 @@ class UserCreate(schemas.BaseUserCreate):
 
 class UserUpdate(schemas.BaseUserUpdate):
     username: Optional[str] = None
+    api_keys: Optional[dict] = None
 
 class HumanBuyerRead(SQLModel):
     user_id: int
