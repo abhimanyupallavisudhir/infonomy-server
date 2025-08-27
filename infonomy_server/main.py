@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from sqlmodel import Session, select
 from infonomy_server.database import create_db_and_tables, get_db
 from infonomy_server.models import User, InfoOffer, DecisionContext
-from infonomy_server.schemas import UserRead, UserCreate, UserUpdate
+from infonomy_server.schemas import UserRead, UserCreate, UserUpdate, UserReadPrivate
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
 from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
 from typing import List
@@ -60,7 +60,7 @@ def get_users(db: Session = Depends(get_db)):
     return db_users
 
 
-@app.get("/users/me", response_model=UserRead, tags=["users"])
+@app.get("/users/me", response_model=UserReadPrivate, tags=["users"])
 def get_current_user(
     current_user: User = Depends(current_active_user),
 ):
@@ -68,7 +68,7 @@ def get_current_user(
     return current_user
 
 
-@app.put("/users/me", response_model=UserRead, tags=["users"])
+@app.put("/users/me", response_model=UserReadPrivate, tags=["users"])
 def update_current_user(
     user_updates: UserUpdate,
     db: Session = Depends(get_db),

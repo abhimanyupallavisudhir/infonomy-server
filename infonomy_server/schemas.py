@@ -9,7 +9,14 @@ from infonomy_server.models import LLMBuyerType
 class UserRead(schemas.BaseUser[int]):
     username: str
     created_at: datetime
-    api_keys: Optional[dict] = None
+    last_login_date: Optional[datetime]
+    balance: float
+    available_balance: float
+    daily_bonus_amount: float
+    # api_keys: Optional[dict] = None
+
+class UserReadPrivate(UserRead):
+    api_keys: dict
 
 class UserCreate(schemas.BaseUserCreate):
     username: str
