@@ -61,10 +61,10 @@ class SellerMatcherRead(SQLModel):
 class SellerMatcherCreate(SQLModel):
     keywords:           Optional[List[str]] = None
     context_pages:      Optional[List[str]] = None
-    min_max_budget:     float
-    min_inspection_rate: float
-    min_purchase_rate:   float
-    min_priority:        int
+    min_max_budget:     float = 0.0
+    min_inspection_rate: float = 0.0
+    min_purchase_rate:   float = 0.0
+    min_priority:        int = 0
     buyer_type:          Optional[str] = None
     buyer_llm_model:     Optional[List[str]] = None
     buyer_system_prompt: Optional[List[str]] = None

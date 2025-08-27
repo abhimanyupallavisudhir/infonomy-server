@@ -283,7 +283,7 @@ class SellerMatcher(SQLModel, table=True):
     min_purchase_rate: float = Field(default=0.0, index=True, description="Minimum purchase rate the buyer should have for that priority of query")
     min_priority: int = Field(default=0, index=True, description="Minimum priority query to match")
     buyer_type: Optional[str] = Field(
-        sa_column=Column(String, nullable=False, index=True),
+        sa_column=Column(String, nullable=True, index=True),
         description="Type of buyer ('human_buyer' or 'llm_buyer'); None to match both",
         default=None,
     )
