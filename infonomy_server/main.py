@@ -6,6 +6,12 @@ from infonomy_server.schemas import UserRead, UserCreate, UserUpdate, UserReadPr
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
 from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
 
+# Import Celery app to ensure configuration is loaded
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from celery_app import celery
+
 app = FastAPI(title="Q&A Platform API", version="1.0.0")
 
 @app.on_event("startup")

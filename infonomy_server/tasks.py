@@ -1,7 +1,6 @@
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional
-from celery import shared_task
 from sqlmodel import Session, select
 
 # Import the Celery app to ensure correct configuration is used
@@ -25,7 +24,7 @@ from infonomy_server.models import (
 )
 
 
-@shared_task
+@celery.task
 def process_bot_sellers_for_context(context_id: int):
     """
     Process all BotSellers that have matchers matching a DecisionContext.
@@ -233,7 +232,7 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
         return fallback_info, "Information temporarily unavailable", 0.0
 
 
-@shared_task(bind=True)
+@celery.task(bind=True)
 def inspect_task(
     self,
     context_id: int,
