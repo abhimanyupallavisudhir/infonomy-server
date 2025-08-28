@@ -5,7 +5,6 @@ from infonomy_server.models import User, InfoOffer, DecisionContext
 from infonomy_server.schemas import UserRead, UserCreate, UserUpdate, UserReadPrivate
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
 from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
-from typing import List
 
 app = FastAPI(title="Q&A Platform API", version="1.0.0")
 
@@ -16,6 +15,57 @@ def on_startup():
 @app.get("/")
 def root():
     return {"message": "Welcome to the Q&A Platform API"}
+
+# User Endpoints - Define these BEFORE FastAPI Users routes to avoid conflicts
+
+@app.get("/users/", response_model=list[UserRead], tags=["users"])
+def get_users(db: Session = Depends(get_db)):
+    db_users = db.exec(select(User)).all()
+    return db_users
+
+
+@app.get("/users/{user_id}", response_model=UserRead, tags=["users"])
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get public user profile by ID"""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@app.get("/users/me", response_model=UserReadPrivate, tags=["users"])
+def get_current_user(
+    current_user: User = Depends(current_active_user),
+):
+    """Get current user profile"""
+    return current_user
+
+
+@app.put("/users/me", response_model=UserReadPrivate, tags=["users"])
+def update_current_user(
+    user_updates: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    """Update current user profile"""
+    for k, v in user_updates.dict(exclude_unset=True).items():
+        setattr(current_user, k, v)
+    
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+# Include our custom routes
+app.include_router(decision_contexts.router)
+app.include_router(info_offers.router)
+app.include_router(inspection.router)
+app.include_router(inbox.router)
+app.include_router(bot_sellers.router)
+app.include_router(profiles.router)
 
 # Include FastAPI Users routes
 app.include_router(
@@ -43,57 +93,6 @@ app.include_router(
     prefix="/users",
     tags=["users"],
 )
-
-# Include our custom routes
-app.include_router(decision_contexts.router)
-app.include_router(info_offers.router)
-app.include_router(inspection.router)
-app.include_router(inbox.router)
-app.include_router(bot_sellers.router)
-app.include_router(profiles.router)
-
-# User Endpoints
-
-@app.get("/users/", response_model=list[UserRead], tags=["users"])
-def get_users(db: Session = Depends(get_db)):
-    db_users = db.exec(select(User)).all()
-    return db_users
-
-
-@app.get("/users/me", response_model=UserReadPrivate, tags=["users"])
-def get_current_user(
-    current_user: User = Depends(current_active_user),
-):
-    """Get current user profile"""
-    return current_user
-
-
-@app.put("/users/me", response_model=UserReadPrivate, tags=["users"])
-def update_current_user(
-    user_updates: UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
-):
-    """Update current user profile"""
-    for k, v in user_updates.dict(exclude_unset=True).items():
-        setattr(current_user, k, v)
-    
-    db.add(current_user)
-    db.commit()
-    db.refresh(current_user)
-    return current_user
-
-
-@app.get("/users/{user_id}", response_model=UserRead, tags=["users"])
-def get_user(
-    user_id: int,
-    db: Session = Depends(get_db),
-):
-    """Get public user profile by ID"""
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
 
 
 @app.get("/users/me/purchases", tags=["users"])

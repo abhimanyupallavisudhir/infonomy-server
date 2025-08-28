@@ -8,3 +8,5 @@ openapi-generator-cli generate \
   -o ../infonomy-client \
   --additional-properties packageName=infonomy_client,packageVersion=1.0.0 \
   --global-property packageLicense=MIT
+
+# then manually edit "NoLicense" to "MIT" in the generated client's pyproject.toml because for some reason it's not doing it automatically
