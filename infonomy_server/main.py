@@ -17,6 +17,7 @@ def root():
     return {"message": "Welcome to the Q&A Platform API"}
 
 # User Endpoints - Define these BEFORE FastAPI Users routes to avoid conflicts
+# this is weird and I don't know why it's like this
 
 @app.get("/users/", response_model=list[UserRead], tags=["users"])
 def get_users(db: Session = Depends(get_db)):
