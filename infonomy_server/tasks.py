@@ -4,6 +4,9 @@ from typing import List, Optional
 from celery import shared_task
 from sqlmodel import Session, select
 
+# Import the Celery app to ensure correct configuration is used
+from celery_app import celery
+
 from infonomy_server.database import engine
 from infonomy_server.utils import (
     recompute_inbox_for_context,

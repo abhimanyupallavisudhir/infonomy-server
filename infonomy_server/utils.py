@@ -15,6 +15,7 @@ from infonomy_server.auth import current_active_user
 import os
 from contextlib import contextmanager
 
+
 def get_context_for_buyer(
     context_id: int,
     db: Session = Depends(get_db),
