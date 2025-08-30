@@ -190,16 +190,14 @@ class HumanSeller(SQLModel, table=True):
         back_populates="human_seller",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "SellerMatcher.seller_id",
-            "primaryjoin": "and_(HumanSeller.id == SellerMatcher.seller_id, SellerMatcher.seller_type == 'human_seller')"
+            "foreign_keys": "SellerMatcher.seller_id"
         }
     )
     info_offers: List["InfoOffer"] = Relationship(
         back_populates="human_seller",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "InfoOffer.seller_id",
-            "primaryjoin": "and_(HumanSeller.id == InfoOffer.seller_id, InfoOffer.seller_type == 'human_seller')"
+            "foreign_keys": "InfoOffer.seller_id"
         }
     )
 
@@ -239,16 +237,14 @@ class BotSeller(SQLModel, table=True):
         back_populates="bot_seller",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "SellerMatcher.seller_id",
-            "primaryjoin": "and_(BotSeller.id == SellerMatcher.seller_id, SellerMatcher.seller_type == 'bot_seller')"
+            "foreign_keys": "SellerMatcher.seller_id"
         }
     )
     info_offers: List["InfoOffer"] = Relationship(
         back_populates="bot_seller",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "InfoOffer.seller_id",
-            "primaryjoin": "and_(BotSeller.id == InfoOffer.seller_id, InfoOffer.seller_type == 'bot_seller')"
+            "foreign_keys": "InfoOffer.seller_id"
         }
     )
 
