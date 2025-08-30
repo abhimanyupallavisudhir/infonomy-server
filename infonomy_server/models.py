@@ -188,11 +188,19 @@ class HumanSeller(SQLModel, table=True):
     user: User = Relationship(back_populates="seller_profile")
     matchers: List["SellerMatcher"] = Relationship(
         back_populates="human_seller",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "SellerMatcher.seller_id",
+            "primaryjoin": "and_(HumanSeller.id == SellerMatcher.seller_id, SellerMatcher.seller_type == 'human_seller')"
+        }
     )
     info_offers: List["InfoOffer"] = Relationship(
         back_populates="human_seller",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "InfoOffer.seller_id",
+            "primaryjoin": "and_(HumanSeller.id == InfoOffer.seller_id, InfoOffer.seller_type == 'human_seller')"
+        }
     )
 
 class BotSeller(SQLModel, table=True):
@@ -229,11 +237,19 @@ class BotSeller(SQLModel, table=True):
     user: User = Relationship(back_populates="bot_sellers")
     matchers: List["SellerMatcher"] = Relationship(
         back_populates="bot_seller",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "SellerMatcher.seller_id",
+            "primaryjoin": "and_(BotSeller.id == SellerMatcher.seller_id, SellerMatcher.seller_type == 'bot_seller')"
+        }
     )
     info_offers: List["InfoOffer"] = Relationship(
         back_populates="bot_seller",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "InfoOffer.seller_id",
+            "primaryjoin": "and_(BotSeller.id == InfoOffer.seller_id, InfoOffer.seller_type == 'bot_seller')"
+        }
     )
 
 
@@ -291,12 +307,16 @@ class SellerMatcher(SQLModel, table=True):
 
     # Relationships
     inbox_items: List["MatcherInbox"] = Relationship(back_populates="matcher", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    human_seller: Optional["HumanSeller"] = Relationship(back_populates="matchers")
+    bot_seller: Optional["BotSeller"] = Relationship(back_populates="matchers")
 
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
         """Get the seller based on seller_type"""
-        # This will need to be implemented in application code that has access to the session
-        # For now, return None - the actual implementation will depend on the session context
+        if self.seller_type == "human_seller":
+            return self.human_seller
+        elif self.seller_type == "bot_seller":
+            return self.bot_seller
         return None
 
 class DecisionContext(SQLModel, table=True):
@@ -419,6 +439,8 @@ class InfoOffer(SQLModel, table=True):
 
     # Relationships
     context: DecisionContext = Relationship(back_populates="info_offers")
+    human_seller: Optional["HumanSeller"] = Relationship(back_populates="info_offers")
+    bot_seller: Optional["BotSeller"] = Relationship(back_populates="info_offers")
 
     parent_contexts: List[DecisionContext] = Relationship(
         back_populates="parent_offers",
@@ -431,7 +453,10 @@ class InfoOffer(SQLModel, table=True):
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
         """Get the seller based on seller_type"""
-        # This will need to be implemented in application code that has access to the session
+        if self.seller_type == "human_seller":
+            return self.human_seller
+        elif self.seller_type == "bot_seller":
+            return self.bot_seller
         return None
 
 
