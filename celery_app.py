@@ -1,13 +1,9 @@
 from celery import Celery
 from infonomy_server.config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
 
-print(f"DEBUG: Configuring Celery with broker={CELERY_BROKER_URL}, backend={CELERY_RESULT_BACKEND}")
-
 # Force Redis transport by modifying the URLs if they don't already specify it
 broker_url = CELERY_BROKER_URL if '://' in CELERY_BROKER_URL else f"redis://{CELERY_BROKER_URL}"
 backend_url = CELERY_RESULT_BACKEND if '://' in CELERY_RESULT_BACKEND else f"redis://{CELERY_RESULT_BACKEND}"
-
-print(f"DEBUG: Using broker_url={broker_url}, backend_url={backend_url}")
 
 # Use configuration from config.py and explicitly specify Redis transport
 celery = Celery(
@@ -53,10 +49,6 @@ celery.conf.update(
         'amqp': 'redis',  # Force AMQP to use Redis
     }
 )
-
-print(f"DEBUG: Celery broker_transport = {celery.conf.broker_transport}")
-print(f"DEBUG: Celery result_backend_transport = {celery.conf.result_backend_transport}")
-print(f"DEBUG: Celery broker_url = {celery.conf.broker_url}")
 
 # Set this as the current Celery app so shared_task decorators use it
 celery.set_current()

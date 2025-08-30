@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Field, Relationship, Session, select
 from sqlalchemy import Column, JSON, String, CheckConstraint, Table, ForeignKey #, Computed, Float, case
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
-from typing import Optional, List, Literal, Union
+from typing import Optional, List, Literal
 from pydantic import ConfigDict, BaseModel, model_validator
 import datetime
 
@@ -186,20 +186,14 @@ class HumanSeller(SQLModel, table=True):
 
     # Relationships
     user: User = Relationship(back_populates="seller_profile")
-
-    @property
-    def matchers(self) -> List["SellerMatcher"]:
-        """Dynamically fetch matchers for this seller"""
-        # This will need to be implemented in application code that has access to the session
-        # For now, return empty list - the actual implementation will depend on the session context
-        return []
-
-    @property
-    def info_offers(self) -> List["InfoOffer"]:
-        """Dynamically fetch info offers for this seller"""
-        # This will need to be implemented in application code that has access to the session
-        # For now, return empty list - the actual implementation will depend on the session context
-        return []
+    matchers: List["SellerMatcher"] = Relationship(
+        back_populates="human_seller",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    info_offers: List["InfoOffer"] = Relationship(
+        back_populates="human_seller",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 class BotSeller(SQLModel, table=True):
     __tablename__ = "bot_seller"
@@ -233,20 +227,16 @@ class BotSeller(SQLModel, table=True):
 
     # Relationships
     user: User = Relationship(back_populates="bot_sellers")
+    matchers: List["SellerMatcher"] = Relationship(
+        back_populates="bot_seller",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+    info_offers: List["InfoOffer"] = Relationship(
+        back_populates="bot_seller",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
-    @property
-    def matchers(self) -> List["SellerMatcher"]:
-        """Dynamically fetch matchers for this seller"""
-        # This will need to be implemented in application code that has access to the session
-        # For now, return empty list - the actual implementation will depend on the session context
-        return []
 
-    @property
-    def info_offers(self) -> List["InfoOffer"]:
-        """Dynamically fetch info offers for this seller"""
-        # This will need to be implemented in application code that has access to the session
-        # For now, return empty list - the actual implementation will depend on the session context
-        return []
 
     # ensure Pydantic actually runs validators on assignment + init
     model_config = ConfigDict(validate_default=True, validate_assignment=True)
@@ -304,7 +294,7 @@ class SellerMatcher(SQLModel, table=True):
 
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
-        """Dynamically fetch the seller based on seller_type and seller_id"""
+        """Get the seller based on seller_type"""
         # This will need to be implemented in application code that has access to the session
         # For now, return None - the actual implementation will depend on the session context
         return None
@@ -440,9 +430,8 @@ class InfoOffer(SQLModel, table=True):
 
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
-        """Dynamically fetch the seller based on seller_type and seller_id"""
+        """Get the seller based on seller_type"""
         # This will need to be implemented in application code that has access to the session
-        # For now, return None - the actual implementation will depend on the session context
         return None
 
 
@@ -461,67 +450,3 @@ class MatcherInbox(SQLModel, table=True):
     # Relationships
     matcher: SellerMatcher = Relationship(back_populates="inbox_items")
     decision_context: DecisionContext = Relationship()
-
-
-# Utility functions for working with polymorphic sellers
-def get_seller_by_type_and_id(session: Session, seller_type: str, seller_id: int) -> Optional[Union[HumanSeller, BotSeller]]:
-    """Fetch a seller by type and ID from the database"""
-    if seller_type == "human_seller":
-        return session.get(HumanSeller, seller_id)
-    elif seller_type == "bot_seller":
-        return session.get(BotSeller, seller_id)
-    else:
-        return None
-
-
-def set_seller_property_methods(session: Session):
-    """Set up the seller property methods for instances that need them"""
-    
-    def seller_property_for_matcher(self):
-        """Property method for SellerMatcher instances"""
-        return get_seller_by_type_and_id(session, self.seller_type, self.seller_id)
-    
-    def seller_property_for_offer(self):
-        """Property method for InfoOffer instances"""
-        return get_seller_by_type_and_id(session, self.seller_type, self.seller_id)
-    
-    def matchers_property_for_human_seller(self):
-        """Property method for HumanSeller instances"""
-        return session.exec(
-            select(SellerMatcher)
-            .where(SellerMatcher.seller_type == "human_seller")
-            .where(SellerMatcher.seller_id == self.id)
-        ).all()
-    
-    def matchers_property_for_bot_seller(self):
-        """Property method for BotSeller instances"""
-        return session.exec(
-            select(SellerMatcher)
-            .where(SellerMatcher.seller_type == "bot_seller")
-            .where(SellerMatcher.seller_id == self.id)
-        ).all()
-    
-    def info_offers_property_for_human_seller(self):
-        """Property method for HumanSeller instances"""
-        return session.exec(
-            select(InfoOffer)
-            .where(InfoOffer.seller_type == "human_seller")
-            .where(InfoOffer.seller_id == self.id)
-        ).all()
-    
-    def info_offers_property_for_bot_seller(self):
-        """Property method for BotSeller instances"""
-        return session.exec(
-            select(InfoOffer)
-            .where(InfoOffer.seller_type == "bot_seller")
-            .where(InfoOffer.seller_id == self.id)
-        ).all()
-    
-    
-    # Monkey patch the classes to add the properties
-    SellerMatcher.seller = property(seller_property_for_matcher)
-    InfoOffer.seller = property(seller_property_for_offer)
-    HumanSeller.matchers = property(matchers_property_for_human_seller)
-    BotSeller.matchers = property(matchers_property_for_bot_seller)
-    HumanSeller.info_offers = property(info_offers_property_for_human_seller)
-    BotSeller.info_offers = property(info_offers_property_for_bot_seller)

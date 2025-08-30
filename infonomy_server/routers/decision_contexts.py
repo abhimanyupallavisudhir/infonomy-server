@@ -108,7 +108,6 @@ def delete_decision_context(
 def read_decision_context(
     context_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
 ):
     db_context = db.get(DecisionContext, context_id)
     if not db_context:
@@ -123,7 +122,6 @@ def list_decision_contexts(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
 ):
     """List all public decision contexts (excluding recursive ones)"""
     stmt = (

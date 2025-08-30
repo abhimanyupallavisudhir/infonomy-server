@@ -111,6 +111,7 @@ class HumanSellerRead(SQLModel):
     id: int
     user_id: int
     matchers: List[SellerMatcherRead]
+    info_offers: List["InfoOfferReadPublic"]
 
     class Config:
         orm_mode = True

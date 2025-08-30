@@ -11,9 +11,10 @@ from infonomy_server.schemas import (
     HumanBuyerRead,
     HumanBuyerCreate,
     HumanBuyerUpdate,
+    HumanSellerRead,
     SellerMatcherRead,
-    SellerMatcherCreate,
     SellerMatcherUpdate,
+    SellerMatcherCreate,
 )
 from infonomy_server.auth import current_active_user
 from typing import List
@@ -90,7 +91,7 @@ def create_human_seller(
     return human_seller
 
 
-@router.get("/sellers/me", response_model=HumanSeller)
+@router.get("/sellers/me", response_model=HumanSellerRead)
 def read_current_human_seller(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
