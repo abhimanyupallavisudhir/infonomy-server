@@ -96,6 +96,7 @@ class SellerMatcherUpdate(SQLModel):
 class SellerRead(SQLModel):
     id: int
     matchers: List[SellerMatcherRead]
+    type: str
 
     class Config:
         orm_mode = True

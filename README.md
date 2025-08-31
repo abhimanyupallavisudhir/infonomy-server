@@ -28,6 +28,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] make sure rates are correctly counted and maintained
 - [x] let users put their API keys
 - [x] balances
+- [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] payments
 
 ### simplificatons made
