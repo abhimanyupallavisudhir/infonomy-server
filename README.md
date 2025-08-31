@@ -30,6 +30,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] balances
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] payments
+- [ ] better solution than letting people put their API keys (which allows leakage)
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
