@@ -47,7 +47,7 @@ def create_info_offer(
     offer = InfoOffer(
         **info_offer.dict(exclude_unset=True),
         context_id=context_id,
-        seller_id=human_seller.user_id,
+        human_seller_id=human_seller.user_id,
         created_at=datetime.utcnow(),
     )
     db.add(offer)

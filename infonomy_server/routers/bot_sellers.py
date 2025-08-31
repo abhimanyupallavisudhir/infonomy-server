@@ -136,7 +136,7 @@ def create_bot_seller_matcher(
     
     db_matcher = SellerMatcher(
         **matcher.dict(),
-        seller_id=bot_seller_id,
+        bot_seller_id=bot_seller_id,
         seller_type="bot_seller"
     )
     db.add(db_matcher)
