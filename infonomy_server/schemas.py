@@ -95,7 +95,6 @@ class SellerMatcherUpdate(SQLModel):
 
 class SellerRead(SQLModel):
     id: int
-    type: str
     matchers: List[SellerMatcherRead]
 
     class Config:

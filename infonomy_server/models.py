@@ -183,7 +183,8 @@ class HumanSeller(SQLModel, table=True):
     __tablename__ = "human_seller"
     id: int = Field(primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
-
+    type: str = Field(default="human_seller")
+    
     # Relationships
     user: User = Relationship(back_populates="seller_profile")
     matchers: List["SellerMatcher"] = Relationship(
@@ -205,7 +206,7 @@ class BotSeller(SQLModel, table=True):
     )
     id: int = Field(primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
-
+    type: str = Field(default="bot_seller")
     info: Optional[str] = Field(
         sa_column=Column(String, nullable=True),
         description="For bots that just regurgitate a piece of info"
@@ -241,22 +242,28 @@ class BotSeller(SQLModel, table=True):
     # ensure Pydantic actually runs validators on assignment + init
     model_config = ConfigDict(validate_default=True, validate_assignment=True)
 
-    @model_validator(mode="before")
-    def check_info_price_or_llm(cls, values: dict):
-        info = values.get("info")
-        price = values.get("price")
-        model = values.get("llm_model")
-        prompt = values.get("llm_prompt")
+    # BUG validator doesn't work -- for whatever reason the info, price, model, and prompt are all None
+    # This doesn't happen when we get rid of the validator (the BotSeller is created with the correct values),
+    # but the validator gets it wrong. It might be because the validator is run before the fields are set.
+    # But setting "after" doesn't work either.
+    # @model_validator(mode="after")
+    # def check_info_price_or_llm(self):
+    #     # Debug: Print what the validator sees
+    #     print(f"DEBUG VALIDATOR: self.info = {self.info}")
+    #     print(f"DEBUG VALIDATOR: self.price = {self.price}")
+    #     print(f"DEBUG VALIDATOR: self.llm_model = {self.llm_model}")
+    #     print(f"DEBUG VALIDATOR: self.llm_prompt = {self.llm_prompt}")
+    #     print(f"DEBUG VALIDATOR: self.user_id = {self.user_id}")
         
-        # Must have either (info and price) or (llm_model and llm_prompt)
-        has_fixed_info = info is not None and price is not None
-        has_llm = model is not None and prompt is not None
+    #     # Must have either (info and price) or (llm_model and llm_prompt)
+    #     has_fixed_info = self.info is not None and self.price is not None
+    #     has_llm = self.llm_model is not None and self.llm_prompt is not None
         
-        if not (has_fixed_info or has_llm):
-            raise ValueError(
-                "Must set either `info` and `price` or both `llm_model` and `llm_prompt`."
-            )
-        return values
+    #     if not (has_fixed_info or has_llm):
+    #         raise ValueError(
+    #             "Must set either `info` and `price` or both `llm_model` and `llm_prompt`."
+    #         )
+    #     return self
 
 class SellerMatcher(SQLModel, table=True):
     id: int = Field(primary_key=True)
