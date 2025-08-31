@@ -16,7 +16,6 @@ class UserRead(schemas.BaseUser[int]):
     buyer_profile: Optional["HumanBuyerRead"]
     seller_profile: Optional["HumanSellerRead"]
     bot_sellers: Optional[List["BotSellerRead"]]
-    # api_keys: Optional[dict] = None
 
 class UserReadPrivate(UserRead):
     api_keys: dict
@@ -31,7 +30,7 @@ class UserUpdate(schemas.BaseUserUpdate):
     api_keys: Optional[dict] = None
 
 class HumanBuyerRead(SQLModel):
-    user_id: int
+    id: int
     default_child_llm: LLMBuyerType
     default_max_budget: float
     num_queries: dict[int, int]
@@ -113,7 +112,6 @@ class SellerRead(SQLModel):
 
 class HumanSellerRead(SQLModel):
     id: int
-    user_id: int
     matchers: List[SellerMatcherRead]
     info_offers: List["InfoOfferReadPublic"]
 
@@ -155,7 +153,8 @@ class DecisionContextRead(SQLModel):
     context_pages: Optional[List[str]]
     buyer_id: int
     max_budget: float
-    seller_ids: Optional[List[int]]
+    human_seller_ids: Optional[List[int]]
+    bot_seller_ids: Optional[List[int]]
     priority: int
     created_at: datetime
     # # for recursive
@@ -171,19 +170,24 @@ class DecisionContextCreateNonRecursive(SQLModel):
     query: Optional[str] = None
     context_pages: Optional[List[str]] = None
     max_budget: float
-    seller_ids: Optional[List[int]] = None
+    human_seller_ids: Optional[List[int]] = None
+    bot_seller_ids: Optional[List[int]] = None
     priority: int = 0
 
 class DecisionContextUpdateNonRecursive(SQLModel):
     query: Optional[str] = None
     context_pages: Optional[List[str]] = None
     max_budget: Optional[float] = None
-    seller_ids: Optional[List[int]] = None
+    human_seller_ids: Optional[List[int]] = None
+    bot_seller_ids: Optional[List[int]] = None
     priority: Optional[int] = None
 
 class InfoOfferReadPublic(SQLModel):
     id: int
-    seller_id: int
+    human_seller_id: Optional[int]
+    bot_seller_id: Optional[int]
+    seller_type: str
+    context_id: int
     public_info: Optional[str]
     price: float
     created_at: datetime

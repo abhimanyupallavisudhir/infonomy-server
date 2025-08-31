@@ -27,8 +27,12 @@ def read_decision_contexts_for_matcher(
 ):
     # authorize…
     matcher = db.get(SellerMatcher, matcher_id)
-    if not matcher or matcher.seller.user_id != current_user.id:
+    if not matcher:
         raise HTTPException(status_code=404)
+    if matcher.seller.type == "bot_seller":
+        raise HTTPException(status_code=403, detail="Cannot view bot seller inbox")
+    if matcher.seller.type == "human_seller" and matcher.seller.id != current_user.id:
+        raise HTTPException(status_code=401, detail="Cannot view inbox of other human sellers")
 
     # fetch all unread contexts
     stmt = (

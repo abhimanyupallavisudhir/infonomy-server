@@ -34,7 +34,7 @@ def create_bot_seller(
     # First check for HumanSeller
     from infonomy_server.models import HumanSeller
     existing_human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     
     # If no HumanSeller, check if they have any existing BotSellers
@@ -163,7 +163,7 @@ def list_bot_seller_matchers(
     
     matchers = db.exec(
         select(SellerMatcher)
-        .where(SellerMatcher.seller_id == bot_seller_id)
+        .where(SellerMatcher.bot_seller_id == bot_seller_id)
         .where(SellerMatcher.seller_type == "bot_seller")
     ).all()
     return matchers
@@ -186,7 +186,7 @@ def update_bot_seller_matcher(
     db_matcher = db.get(SellerMatcher, matcher_id)
     if not db_matcher:
         raise HTTPException(status_code=404, detail="Matcher not found")
-    if db_matcher.seller_id != bot_seller_id or db_matcher.seller_type != "bot_seller":
+    if db_matcher.bot_seller_id != bot_seller_id or db_matcher.seller_type != "bot_seller":
         raise HTTPException(status_code=404, detail="Matcher not found for this BotSeller")
     
     for k, v in matcher_updates.dict(exclude_unset=True).items():
@@ -218,7 +218,7 @@ def delete_bot_seller_matcher(
     db_matcher = db.get(SellerMatcher, matcher_id)
     if not db_matcher:
         raise HTTPException(status_code=404, detail="Matcher not found")
-    if db_matcher.seller_id != bot_seller_id or db_matcher.seller_type != "bot_seller":
+    if db_matcher.bot_seller_id != bot_seller_id or db_matcher.seller_type != "bot_seller":
         raise HTTPException(status_code=404, detail="Matcher not found for this BotSeller")
     
     # Remove all inbox items for this matcher before deleting it

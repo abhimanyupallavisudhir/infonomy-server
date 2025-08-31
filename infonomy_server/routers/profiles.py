@@ -33,7 +33,7 @@ def create_human_buyer(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
-    db_human_buyer = HumanBuyer(**human_buyer.dict(), user_id=current_user.id)
+    db_human_buyer = HumanBuyer(**human_buyer.dict(), id=current_user.id)
     db.add(db_human_buyer)
     db.commit()
     db.refresh(db_human_buyer)
@@ -46,7 +46,7 @@ def read_current_human_buyer(
     current_user: User = Depends(current_active_user),
 ):
     db_human_buyer = db.exec(
-        select(HumanBuyer).where(HumanBuyer.user_id == current_user.id)
+        select(HumanBuyer).where(HumanBuyer.id == current_user.id)
     ).first()
     if not db_human_buyer:
         raise HTTPException(status_code=404, detail="Human buyer profile not found")
@@ -60,7 +60,7 @@ def update_current_human_buyer(
     current_user: User = Depends(current_active_user),
 ):
     db_human_buyer = db.exec(
-        select(HumanBuyer).where(HumanBuyer.user_id == current_user.id)
+        select(HumanBuyer).where(HumanBuyer.id == current_user.id)
     ).first()
     if not db_human_buyer:
         raise HTTPException(status_code=404, detail="Human buyer profile not found")
@@ -78,13 +78,13 @@ def create_human_seller(
 ):
     # Ensure the user does not already have a seller profile
     existing_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if existing_seller:
         raise HTTPException(status_code=400, detail="User already has a seller profile")
 
     # Create the new HumanSeller profile
-    human_seller = HumanSeller(user_id=current_user.id)
+    human_seller = HumanSeller(id=current_user.id)
     db.add(human_seller)
     db.commit()
     db.refresh(human_seller)
@@ -98,7 +98,7 @@ def read_current_human_seller(
 ):
     """Get current user's seller profile"""
     db_human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if not db_human_seller:
         raise HTTPException(status_code=404, detail="Human seller profile not found")
@@ -114,7 +114,7 @@ def create_human_seller_matcher(
 ):
     """Create a new matcher for the current user's HumanSeller profile"""
     human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if not human_seller:
         raise HTTPException(status_code=404, detail="Human seller profile not found")
@@ -140,7 +140,7 @@ def list_human_seller_matchers(
 ):
     """List all matchers for the current user's HumanSeller profile"""
     human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if not human_seller:
         raise HTTPException(status_code=404, detail="Human seller profile not found")
@@ -161,7 +161,7 @@ def update_human_seller_matcher(
 ):
     """Update a matcher for the current user's HumanSeller profile"""
     human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if not human_seller:
         raise HTTPException(status_code=404, detail="Human seller profile not found")
@@ -193,7 +193,7 @@ def delete_human_seller_matcher(
 ):
     """Delete a matcher for the current user's HumanSeller profile"""
     human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == current_user.id)
+        select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if not human_seller:
         raise HTTPException(status_code=404, detail="Human seller profile not found")

@@ -31,6 +31,8 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] payments
 - [ ] better solution than letting people put their API keys (which allows leakage)
+- [ ] allow matchers to filter for only recursive contexts (for botsellers)
+- [ ] logging=True and better handling of LLM API fails
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
@@ -46,7 +48,6 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] transition to PostgreSQL
 - [ ] pre-populate with buyers and sellers
 - [ ] verified info
-- [ ] logging=True
 - [ ] better flexibility in choosing LLM agents
 - [ ] browser extension
 - [ ] UI (maybe Q&A like UI)

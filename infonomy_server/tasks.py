@@ -263,7 +263,7 @@ def inspect_task(
                 ctx = session.get(DecisionContext, context_id)
                 buyer = session.get(HumanBuyer, buyer_id)
                 if ctx and buyer:
-                    user = session.get(User, buyer.user_id)
+                    user = session.get(User, buyer.id)
                     if user:
                         # Restore the max_budget to available_balance since no purchases were made
                         user.available_balance += ctx.max_budget
@@ -292,7 +292,7 @@ def inspect_task(
             # no more offers to inspect → finish
             # If this is a top-level context and we're done, restore the max_budget to available_balance
             if depth == 0:
-                user = session.get(User, buyer.user_id)
+                user = session.get(User, buyer.id)
                 if user:
                     # Restore the max_budget to available_balance since no purchases were made
                     user.available_balance += ctx.max_budget
@@ -312,7 +312,7 @@ def inspect_task(
         #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
         
         # Get the user to pass their API keys to the LLM
-        user = session.get(User, buyer.user_id)
+        user = session.get(User, buyer.id)
         
         chosen_ids, child_ctx = call_llm(
             context=ctx, 
@@ -346,7 +346,7 @@ def inspect_task(
                 
                 # Handle balance logic for top-level contexts only
                 # Get the user to update their balance
-                user = session.get(User, buyer.user_id)
+                user = session.get(User, buyer.id)
                 if user:
                     # Calculate total cost of purchased offers
                     total_cost = sum(off.price for off in offers if off.id in chosen_ids)

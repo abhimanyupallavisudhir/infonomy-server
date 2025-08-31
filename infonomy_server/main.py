@@ -132,7 +132,8 @@ def get_current_user_purchases(
             {
                 "offer_id": offer.id,
                 "context_id": offer.context_id,
-                "seller_id": offer.seller_id,
+                "human_seller_id": offer.human_seller_id,
+                "bot_seller_id": offer.bot_seller_id,
                 "seller_type": offer.seller_type,
                 "price": offer.price,
                 "purchased_at": offer.created_at,  # Using created_at as proxy for purchase time
@@ -195,7 +196,8 @@ def get_current_user_sales(
             {
                 "offer_id": offer.id,
                 "context_id": offer.context_id,
-                "seller_id": offer.seller_id,
+                "human_seller_id": offer.human_seller_id,
+                "bot_seller_id": offer.bot_seller_id,
                 "seller_type": offer.seller_type,
                 "price": offer.price,
                 "sold_at": offer.created_at,  # Using created_at as proxy for sale time
@@ -239,7 +241,8 @@ def get_transactions(
                 "type": "purchase",
                 "offer_id": offer.id,
                 "context_id": offer.context_id,
-                "seller_id": offer.seller_id,
+                "human_seller_id": offer.human_seller_id,
+                "bot_seller_id": offer.bot_seller_id,
                 "seller_type": offer.seller_type,
                 "amount": -offer.price,  # Negative for purchases
                 "timestamp": offer.created_at,

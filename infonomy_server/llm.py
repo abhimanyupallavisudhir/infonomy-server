@@ -11,19 +11,24 @@ class LLMResponse(BaseModel):
     chosen_offer_ids: Optional[List[int]]
     followup_query: Optional[str]
     followup_query_budget: Optional[float]
-    followup_query_seller_ids: Optional[List[int]] = None
+    followup_query_human_seller_ids: Optional[List[int]] = None
+    followup_query_bot_seller_ids: Optional[List[int]] = None
 
     @model_validator(mode="before")
     def exactly_one(cls, self):
         assert (self.chosen_offer_ids is not None) != (
             self.followup_query is not None
         ), "Exactly one of chosen_offer_ids or followup_query must be provided"
-        assert (self.followup_query_budget is not None) == (
-            self.followup_query is not None
-        ), "followup_query_budget must be provided if and only if followup_query is provided"
-        assert (self.followup_query is not None) or (self.followup_query_seller_ids is None), (
-            "followup_query_seller_ids must be None if followup_query is not provided"
+        assert (self.followup_query is None) == (self.followup_query_budget is None), (
+            "Iff followup_query is provided, then followup_query_budget must also be provided"
         )
+        assert (self.followup_query is None) == (
+            (self.followup_human_seller_ids is None)
+            and (self.followup_bot_seller_ids is None)
+        ), (
+            "Iff followup_query is provided, then followup_human_seller_ids or followup_bot_seller_ids must be provided"
+        )
+
         return self
 
 
@@ -49,8 +54,9 @@ You may return either:
 - A followup_query and corresponding followup_query_budget: 
 a query that you want to ask, if you need further information to make a decision. This query could even be
 an empty string or simply "Should I buy this?", if you just want to see if someone can provide some context on the info being
-offered. You can also optionally specify followup_query_seller_ids, e.g. if you want to direct the followup query to the specific
-sellers of the offers you are inspecting. Otherwise your query will be sent to all sellers in the market.
+offered. You can also optionally specify followup_query_human_seller_ids or followup_query_bot_seller_ids, e.g. if you want to 
+direct the followup query to the specific sellers of the offers you are inspecting. Otherwise your query will be sent to all
+sellers in the market.
 
 NOTE: Although we use the term "information", these InfoOffers aren't verified information --- just any string of text, that
 any participant in the market can offer. So you should not assume that the information is true or useful, and you should evaluate
@@ -86,15 +92,15 @@ InfoOffers:
 def render_decision_context(ctx: DecisionContext) -> str:
     if ctx.parent_id is None:
         out = {
-        # "id": ctx.id,
-        "query": ctx.query,
-        "context_pages": ctx.context_pages,
-    }
+            # "id": ctx.id,
+            "query": ctx.query,
+            "context_pages": ctx.context_pages,
+        }
     else:
         out = {
             "is_recursive": True,
             "parent_context": render_decision_context(ctx.parent),
-            "parent_offers": render_info_offers_private(ctx.parent_offers)
+            "parent_offers": render_info_offers_private(ctx.parent_offers),
         }
     return str(out)
 
@@ -102,7 +108,8 @@ def render_decision_context(ctx: DecisionContext) -> str:
 def render_info_offer_private(io: InfoOffer) -> dict:
     return {
         "id": io.id,
-        "seller_id": io.seller_id,
+        "human_seller_id": io.human_seller_id,
+        "bot_seller_id": io.bot_seller_id,
         "seller_type": io.seller_type,
         "private_info": io.private_info,
         "public_info": io.public_info,
@@ -137,13 +144,13 @@ def call_llm(
     ]
     accept = False
     available_ids = set(io.id for io in offers)
-    
+
     # Use user's API keys if available, otherwise fall back to server defaults
     api_keys = user.api_keys if user and user.api_keys else {}
-    
+
     # Import the context manager
     from infonomy_server.utils import temporary_api_keys
-    
+
     while not accept:
         with temporary_api_keys(api_keys):
             response = CLIENT.chat.completions.create(
@@ -178,7 +185,10 @@ def call_llm(
             return response.chosen_offer_ids, None
         elif response.followup_query:
             # check followup_query_budget
-            if response.followup_query_budget > context.max_budget - used_budget or response.followup_query_budget < 0:
+            if (
+                response.followup_query_budget > context.max_budget - used_budget
+                or response.followup_query_budget < 0
+            ):
                 messages.append({"role": "assistant", "content": str(response)})
                 messages.append(
                     {
@@ -188,12 +198,18 @@ def call_llm(
                 )
                 continue
             accept = True
-            if response.followup_query_seller_ids:
-                seller_ids = response.followup_query_seller_ids
-            elif context.seller_ids:
-                seller_ids = context.seller_ids
+            if response.followup_query_human_seller_ids:
+                human_seller_ids = response.followup_query_human_seller_ids
+            elif context.human_seller_ids:
+                human_seller_ids = context.human_seller_ids
             else:
-                seller_ids = None
+                human_seller_ids = None
+            if response.followup_query_bot_seller_ids:
+                bot_seller_ids = response.followup_query_bot_seller_ids
+            elif context.bot_seller_ids:
+                bot_seller_ids = context.bot_seller_ids
+            else:
+                bot_seller_ids = None
             # Create a new DecisionContext for the follow-up query
             child_ctx = DecisionContext(
                 query=response.followup_query,
@@ -201,7 +217,8 @@ def call_llm(
                 context_pages=context.context_pages,  # Copy the context pages from the parent
                 buyer_id=context.buyer_id,
                 max_budget=response.followup_query_budget,
-                seller_ids=seller_ids,
+                human_seller_ids=human_seller_ids,
+                bot_seller_ids=bot_seller_ids,
                 priority=1,  # intentionally submitted so high priority
             )
             return None, child_ctx

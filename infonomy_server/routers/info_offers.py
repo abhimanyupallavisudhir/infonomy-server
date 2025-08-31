@@ -47,7 +47,7 @@ def create_info_offer(
     offer = InfoOffer(
         **info_offer.dict(exclude_unset=True),
         context_id=context_id,
-        human_seller_id=human_seller.user_id,
+        human_seller_id=human_seller.id,
         created_at=datetime.utcnow(),
     )
     db.add(offer)
@@ -87,7 +87,7 @@ def update_info_offer(
 
     # 2) Authorize
     human_seller = current_user.seller_profile
-    if not human_seller or offer.seller_id != human_seller.user_id:
+    if not human_seller or offer.human_seller_id != human_seller.id:
         raise HTTPException(
             status_code=403, detail="Not allowed to update this info offer"
         )
@@ -131,7 +131,7 @@ def delete_info_offer(
 
     # 2) Authorize
     human_seller = current_user.seller_profile
-    if not human_seller or offer.seller_id != human_seller.user_id:
+    if not human_seller or offer.human_seller_id != human_seller.id:
         raise HTTPException(
             status_code=403, detail="Not allowed to delete this info offer"
         )
@@ -169,13 +169,14 @@ def read_info_offer(
     db_info_offer = db.get(InfoOffer, info_offer_id)
     if not db_info_offer:
         raise HTTPException(status_code=404, detail="Info offer not found")
-
-    is_seller = db_info_offer.seller.user_id == current_user.id
+    
+    is_human_seller = (db_info_offer.seller.type == "human_seller" and db_info_offer.seller.id == current_user.id)
+    is_bot_seller = (db_info_offer.seller.type == "bot_seller" and db_info_offer.seller.user_id == current_user.id)
     is_buyer_who_purchased = (
         db_info_offer.purchased and db_info_offer.context.buyer_id == current_user.id
     )
 
-    if is_seller or is_buyer_who_purchased:
+    if is_human_seller or is_bot_seller or is_buyer_who_purchased:
         return InfoOfferReadPrivate.from_orm(db_info_offer)
     else:
         return InfoOfferReadPublic.from_orm(db_info_offer)
@@ -202,7 +203,7 @@ def read_info_offers_for_decision_context(
     # 3) For each offer, decide which schema to use
     result: List[Union[InfoOfferReadPrivate, InfoOfferReadPublic]] = []
     for offer in offers:
-        is_seller = offer.seller.user_id == current_user.id
+        is_seller = (offer.seller.type == "human_seller" and offer.seller.id == current_user.id)
         is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
 
         if is_seller:
@@ -245,8 +246,8 @@ def list_current_user_info_offers(
     if human_seller:
         human_offers = db.exec(
             select(InfoOffer)
-            .where(InfoOffer.seller_id == human_seller.user_id)
             .where(InfoOffer.seller_type == "human_seller")
+            .where(InfoOffer.human_seller_id == human_seller.id)
             .order_by(InfoOffer.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -257,8 +258,8 @@ def list_current_user_info_offers(
         bot_seller_ids = [bs.id for bs in bot_sellers]
         bot_offers = db.exec(
             select(InfoOffer)
-            .where(InfoOffer.seller_id.in_(bot_seller_ids))
             .where(InfoOffer.seller_type == "bot_seller")
+            .where(InfoOffer.bot_seller_id.in_(bot_seller_ids))
             .order_by(InfoOffer.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -284,7 +285,7 @@ def list_user_info_offers(
     """List info offers by specific user (public view only)"""
     # Check if the user has any seller profiles
     human_seller = db.exec(
-        select(HumanSeller).where(HumanSeller.user_id == user_id)
+        select(HumanSeller).where(HumanSeller.id == user_id)
     ).first()
     
     bot_sellers = db.exec(
@@ -300,7 +301,7 @@ def list_user_info_offers(
     if human_seller:
         human_offers = db.exec(
             select(InfoOffer)
-            .where(InfoOffer.seller_id == human_seller.user_id)
+            .where(InfoOffer.human_seller_id == human_seller.id)
             .where(InfoOffer.seller_type == "human_seller")
             .order_by(InfoOffer.created_at.desc())
         ).all()
@@ -310,7 +311,7 @@ def list_user_info_offers(
         bot_seller_ids = [bs.id for bs in bot_sellers]
         bot_offers = db.exec(
             select(InfoOffer)
-            .where(InfoOffer.seller_id.in_(bot_seller_ids))
+            .where(InfoOffer.bot_seller_id.in_(bot_seller_ids))
             .where(InfoOffer.seller_type == "bot_seller")
             .order_by(InfoOffer.created_at.desc())
         ).all()

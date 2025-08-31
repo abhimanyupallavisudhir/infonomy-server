@@ -83,7 +83,7 @@ class HumanBuyer(SQLModel, table=True):
     # __tablename__ = "human_buyer"
 
     # id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    id: int = Field(foreign_key="user.id", primary_key=True)
 
     # Settings/defaults
     default_child_llm: LLMBuyerType = Field(
@@ -168,21 +168,9 @@ class HumanBuyer(SQLModel, table=True):
 #     __mapper_args__ = {"polymorphic_identity": "llm_buyer"}
 
 
-# Base class for common seller functionality
-class SellerBase(SQLModel):
-    """Base class for seller functionality - not a table"""
-    id: int
-    type: str
-    
-    # Relationships that will be implemented by concrete classes
-    matchers: List["SellerMatcher"]
-    info_offers: List["InfoOffer"]
-
-
 class HumanSeller(SQLModel, table=True):
     __tablename__ = "human_seller"
-    id: int = Field(primary_key=True)
-    user_id: int = Field(foreign_key="user.id", index=True)
+    id: int = Field(foreign_key="user.id", primary_key=True)
     type: str = Field(default="human_seller")
     
     # Relationships
@@ -319,15 +307,6 @@ class SellerMatcher(SQLModel, table=True):
             return "bot_seller"
         return "unknown"
 
-    @property
-    def seller_id(self) -> Optional[int]:
-        """Get the seller ID based on which foreign key is populated"""
-        if self.human_seller_id is not None:
-            return self.human_seller_id
-        elif self.bot_seller_id is not None:
-            return self.bot_seller_id
-        return None
-
 class DecisionContext(SQLModel, table=True):
     id: int = Field(primary_key=True)
     query: Optional[str] = Field(index=True, default=None, description="Custom query for information")
@@ -368,9 +347,14 @@ class DecisionContext(SQLModel, table=True):
     #     default=None,
     #     description="Info offers already purchased in this decision context",
     # )
-    buyer_id: int = Field(foreign_key="humanbuyer.user_id", index=True)
+    buyer_id: int = Field(foreign_key="humanbuyer.id", index=True)
     max_budget: float = Field(default=0.0, index=True)
-    seller_ids: Optional[List[int]] = Field(
+    human_seller_ids: Optional[List[int]] = Field(
+        sa_column=Column(JSON, index=True),
+        default=None,
+        description="Direct query to specific sellers only",
+    )
+    bot_seller_ids: Optional[List[int]] = Field(
         sa_column=Column(JSON, index=True),
         default=None,
         description="Direct query to specific sellers only",
@@ -476,15 +460,6 @@ class InfoOffer(SQLModel, table=True):
         elif self.bot_seller_id is not None:
             return "bot_seller"
         return "unknown"
-
-    @property
-    def seller_id(self) -> Optional[int]:
-        """Get the seller ID based on which foreign key is populated"""
-        if self.human_seller_id is not None:
-            return self.human_seller_id
-        elif self.bot_seller_id is not None:
-            return self.bot_seller_id
-        return None
 
 class MatcherInbox(SQLModel, table=True):
     id: int = Field(primary_key=True)

@@ -166,7 +166,7 @@ def list_user_decision_contexts(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
+    # current_user: User = Depends(current_active_user),
 ):
     """List decision contexts by specific user (excluding recursive ones)"""
     stmt = (
