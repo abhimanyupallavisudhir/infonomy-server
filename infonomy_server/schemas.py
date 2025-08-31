@@ -13,6 +13,9 @@ class UserRead(schemas.BaseUser[int]):
     balance: float
     available_balance: float
     daily_bonus_amount: float
+    buyer_profile: Optional["HumanBuyerRead"]
+    seller_profile: Optional["HumanSellerRead"]
+    bot_sellers: Optional[List["BotSellerRead"]]
     # api_keys: Optional[dict] = None
 
 class UserReadPrivate(UserRead):
