@@ -121,8 +121,7 @@ def create_human_seller_matcher(
     
     db_matcher = SellerMatcher(
         **matcher.dict(),
-        seller_id=human_seller.id,
-        seller_type="human_seller"
+        human_seller_id=human_seller.id
     )
     db.add(db_matcher)
     db.commit()
@@ -148,8 +147,7 @@ def list_human_seller_matchers(
     
     matchers = db.exec(
         select(SellerMatcher)
-        .where(SellerMatcher.seller_id == human_seller.id)
-        .where(SellerMatcher.seller_type == "human_seller")
+        .where(SellerMatcher.human_seller_id == human_seller.id)
     ).all()
     return matchers
 
@@ -171,7 +169,7 @@ def update_human_seller_matcher(
     db_matcher = db.get(SellerMatcher, matcher_id)
     if not db_matcher:
         raise HTTPException(status_code=404, detail="Matcher not found")
-    if db_matcher.seller_id != human_seller.id or db_matcher.seller_type != "human_seller":
+    if db_matcher.human_seller_id != human_seller.id:
         raise HTTPException(status_code=404, detail="Matcher not found for this HumanSeller")
     
     for k, v in matcher_updates.dict(exclude_unset=True).items():
@@ -203,7 +201,7 @@ def delete_human_seller_matcher(
     db_matcher = db.get(SellerMatcher, matcher_id)
     if not db_matcher:
         raise HTTPException(status_code=404, detail="Matcher not found")
-    if db_matcher.seller_id != human_seller.id or db_matcher.seller_type != "human_seller":
+    if db_matcher.human_seller_id != human_seller.id:
         raise HTTPException(status_code=404, detail="Matcher not found for this HumanSeller")
     
     # Remove all inbox items for this matcher before deleting it

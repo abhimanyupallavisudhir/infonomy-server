@@ -170,8 +170,7 @@ def get_current_user_sales(
     if human_seller:
         human_sales = db.exec(
             select(InfoOffer)
-            .where(InfoOffer.seller_id == human_seller.user_id)
-            .where(InfoOffer.seller_type == "human_seller")
+            .where(InfoOffer.human_seller_id == human_seller.id)
             .where(InfoOffer.purchased == True)
             .order_by(InfoOffer.created_at.desc())
         ).all()
@@ -181,8 +180,7 @@ def get_current_user_sales(
         bot_seller_ids = [bs.id for bs in bot_sellers]
         bot_sales = db.exec(
             select(InfoOffer)
-            .where(InfoOffer.seller_id.in_(bot_seller_ids))
-            .where(InfoOffer.seller_type == "bot_seller")
+            .where(InfoOffer.bot_seller_id.in_(bot_seller_ids))
             .where(InfoOffer.purchased == True)
             .order_by(InfoOffer.created_at.desc())
         ).all()
@@ -258,8 +256,7 @@ def get_transactions(
         if current_user.seller_profile:
             human_sales = db.exec(
                 select(InfoOffer)
-                .where(InfoOffer.seller_id == current_user.seller_profile.user_id)
-                .where(InfoOffer.seller_type == "human_seller")
+                .where(InfoOffer.human_seller_id == current_user.seller_profile.id)
                 .where(InfoOffer.purchased == True)
                 .order_by(InfoOffer.created_at.desc())
             ).all()
@@ -269,8 +266,7 @@ def get_transactions(
             bot_seller_ids = [bs.id for bs in current_user.bot_sellers]
             bot_sales = db.exec(
                 select(InfoOffer)
-                .where(InfoOffer.seller_id.in_(bot_seller_ids))
-                .where(InfoOffer.seller_type == "bot_seller")
+                .where(InfoOffer.bot_seller_id.in_(bot_seller_ids))
                 .where(InfoOffer.purchased == True)
                 .order_by(InfoOffer.created_at.desc())
             ).all()

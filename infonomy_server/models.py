@@ -188,19 +188,11 @@ class HumanSeller(SQLModel, table=True):
     user: User = Relationship(back_populates="seller_profile")
     matchers: List["SellerMatcher"] = Relationship(
         back_populates="human_seller",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "SellerMatcher.seller_id",
-            "primaryjoin": "and_(HumanSeller.id == SellerMatcher.seller_id, SellerMatcher.seller_type == 'human_seller')"
-        }
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
     info_offers: List["InfoOffer"] = Relationship(
         back_populates="human_seller",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "InfoOffer.seller_id",
-            "primaryjoin": "and_(HumanSeller.id == InfoOffer.seller_id, InfoOffer.seller_type == 'human_seller')"
-        }
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
 
 class BotSeller(SQLModel, table=True):
@@ -237,19 +229,11 @@ class BotSeller(SQLModel, table=True):
     user: User = Relationship(back_populates="bot_sellers")
     matchers: List["SellerMatcher"] = Relationship(
         back_populates="bot_seller",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "SellerMatcher.seller_id",
-            "primaryjoin": "and_(BotSeller.id == SellerMatcher.seller_id, SellerMatcher.seller_type == 'bot_seller')"
-        }
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
     info_offers: List["InfoOffer"] = Relationship(
         back_populates="bot_seller",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "InfoOffer.seller_id",
-            "primaryjoin": "and_(BotSeller.id == InfoOffer.seller_id, InfoOffer.seller_type == 'bot_seller')"
-        }
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
 
 
@@ -276,8 +260,8 @@ class BotSeller(SQLModel, table=True):
 
 class SellerMatcher(SQLModel, table=True):
     id: int = Field(primary_key=True)
-    seller_id: int = Field(index=True)  # Will reference either human_seller.id or bot_seller.id
-    seller_type: str = Field(index=True)  # 'human_seller' or 'bot_seller'
+    human_seller_id: Optional[int] = Field(foreign_key="human_seller.id", index=True, default=None)
+    bot_seller_id: Optional[int] = Field(foreign_key="bot_seller.id", index=True, default=None)
     keywords: Optional[List[str]] = Field(
         sa_column=Column(JSON, index=True), default=None, description="Keywords to look out for: None to get everything"
     )
@@ -312,11 +296,29 @@ class SellerMatcher(SQLModel, table=True):
 
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
-        """Get the seller based on seller_type"""
-        if self.seller_type == "human_seller":
+        """Get the seller based on which foreign key is populated"""
+        if self.human_seller_id is not None:
             return self.human_seller
-        elif self.seller_type == "bot_seller":
+        elif self.bot_seller_id is not None:
             return self.bot_seller
+        return None
+
+    @property
+    def seller_type(self) -> str:
+        """Get the seller type based on which foreign key is populated"""
+        if self.human_seller_id is not None:
+            return "human_seller"
+        elif self.bot_seller_id is not None:
+            return "bot_seller"
+        return "unknown"
+
+    @property
+    def seller_id(self) -> Optional[int]:
+        """Get the seller ID based on which foreign key is populated"""
+        if self.human_seller_id is not None:
+            return self.human_seller_id
+        elif self.bot_seller_id is not None:
+            return self.bot_seller_id
         return None
 
 class DecisionContext(SQLModel, table=True):
@@ -411,8 +413,8 @@ class DecisionContext(SQLModel, table=True):
 
 class InfoOffer(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    seller_id: int = Field(index=True)  # Will reference either human_seller.id or bot_seller.id
-    seller_type: str = Field(index=True)  # 'human_seller' or 'bot_seller'
+    human_seller_id: Optional[int] = Field(foreign_key="human_seller.id", index=True, default=None)
+    bot_seller_id: Optional[int] = Field(foreign_key="bot_seller.id", index=True, default=None)
     context_id: int = Field(foreign_key="decisioncontext.id", index=True)
     private_info: str = Field(
         sa_column=Column(String, nullable=False),
@@ -452,13 +454,30 @@ class InfoOffer(SQLModel, table=True):
 
     @property
     def seller(self) -> Optional["HumanSeller | BotSeller"]:
-        """Get the seller based on seller_type"""
-        if self.seller_type == "human_seller":
+        """Get the seller based on which foreign key is populated"""
+        if self.human_seller_id is not None:
             return self.human_seller
-        elif self.seller_type == "bot_seller":
+        elif self.bot_seller_id is not None:
             return self.bot_seller
         return None
 
+    @property
+    def seller_type(self) -> str:
+        """Get the seller type based on which foreign key is populated"""
+        if self.human_seller_id is not None:
+            return "human_seller"
+        elif self.bot_seller_id is not None:
+            return "bot_seller"
+        return "unknown"
+
+    @property
+    def seller_id(self) -> Optional[int]:
+        """Get the seller ID based on which foreign key is populated"""
+        if self.human_seller_id is not None:
+            return self.human_seller_id
+        elif self.bot_seller_id is not None:
+            return self.bot_seller_id
+        return None
 
 class MatcherInbox(SQLModel, table=True):
     id: int = Field(primary_key=True)

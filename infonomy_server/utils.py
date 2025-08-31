@@ -299,10 +299,10 @@ def get_inbox_statistics(db: Session) -> dict:
     
     # Count by matcher type
     human_matcher_items = db.query(MatcherInbox).join(SellerMatcher).filter(
-        SellerMatcher.seller_type == "human_seller"
+        SellerMatcher.human_seller_id.isnot(None)
     ).count()
     bot_matcher_items = db.query(MatcherInbox).join(SellerMatcher).filter(
-        SellerMatcher.seller_type == "bot_seller"
+        SellerMatcher.bot_seller_id.isnot(None)
     ).count()
     
     return {

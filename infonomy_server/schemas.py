@@ -50,7 +50,8 @@ class HumanBuyerUpdate(SQLModel):
 
 class SellerMatcherRead(SQLModel):
     id:                 int
-    seller_id:          int
+    human_seller_id:    Optional[int]
+    bot_seller_id:      Optional[int]
     keywords:           Optional[List[str]]
     context_pages:      Optional[List[str]]
     min_max_budget:     float

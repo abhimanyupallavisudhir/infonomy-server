@@ -42,7 +42,7 @@ def process_bot_sellers_for_context(context_id: int):
         # Find all BotSeller matchers that match this context
         bot_matchers = session.exec(
             select(SellerMatcher)
-            .where(SellerMatcher.seller_type == "bot_seller")
+            .where(SellerMatcher.bot_seller_id.isnot(None))
         ).all()
         
         # Process each matching BotSeller
@@ -54,7 +54,7 @@ def process_bot_sellers_for_context(context_id: int):
                     continue
                 
                 # Get the BotSeller
-                bot_seller = session.get(BotSeller, matcher.seller_id)
+                bot_seller = session.get(BotSeller, matcher.bot_seller_id)
                 if not bot_seller:
                     continue
                 
@@ -144,8 +144,7 @@ def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, 
         return None
     
     return InfoOffer(
-        seller_id=bot_seller.id,
-        seller_type="bot_seller",
+        bot_seller_id=bot_seller.id,
         context_id=context.id,
         private_info=private_info,
         public_info=public_info,
