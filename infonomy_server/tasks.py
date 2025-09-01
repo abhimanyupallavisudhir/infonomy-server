@@ -314,7 +314,7 @@ def inspect_task(
         
         # Get the user to pass their API keys to the LLM
         user = session.get(User, buyer.id)
-        
+        print(f"DEBUG: {buyer.default_child_llm}")
         chosen_ids, child_ctx = call_llm(
             context=ctx, 
             offers=offers, 

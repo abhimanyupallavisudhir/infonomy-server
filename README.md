@@ -46,6 +46,8 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 
 ### important development
 - [ ] transition to PostgreSQL
+- [ ] make things async
+- [ ] set up alembic 
 - [ ] pre-populate with buyers and sellers
 - [ ] verified info
 - [ ] better flexibility in choosing LLM agents
