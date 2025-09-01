@@ -57,15 +57,15 @@ their decision.
 You must respond with a JSON object that contains exactly one of the following:
 
 Option 1 - Choose to buy offers:
-{
+{{
   "chosen_offer_ids": [1, 2, 3]  // List of offer IDs you want to purchase
-}
+}}
 
 Option 2 - Ask a follow-up question:
-{
+{{
   "followup_query": "Your question here",
   "followup_query_budget": 10.0  // Budget for this follow-up query (must be <= max_budget)
-}
+}}
 
 You can also optionally include:
 - "followup_query_human_seller_ids": [1, 2]  // Specific human sellers to ask
@@ -155,8 +155,16 @@ def call_llm(
         "used_budget": sum(io.price for io in known_info)
     })
     
-    prompt = buyer.custom_prompt or INSTRUCTIONS
+    prompt = buyer.custom_prompt
     used_budget = sum(io.price for io in known_info)
+    
+    formatted_prompt = prompt.format(
+        ctx_str=render_decision_context(context),
+        known_info_str=render_info_offers_private(known_info),
+        offers_str=render_info_offers_private(offers),
+        used_budget=used_budget,
+    )
+    
     messages = [
         {
             "role": "system",
@@ -164,12 +172,7 @@ def call_llm(
         },
         {
             "role": "user",
-            "content": prompt.format(
-                ctx_str=render_decision_context(context),
-                known_info_str=render_info_offers_private(known_info),
-                offers_str=render_info_offers_private(offers),
-                used_budget=used_budget,
-            ),
+            "content": formatted_prompt,
         },
     ]
     accept = False
@@ -250,6 +253,21 @@ def call_llm(
                             elif isinstance(arg, str) and ('{' in arg or '[' in arg):
                                 raw_response = arg
                                 break
+                    
+                    # If we still don't have the raw response, try to make a direct call to get it
+                    if not raw_response and "validation error" in str(e).lower():
+                        try:
+                            # Make a direct call without response_model to get the raw response
+                            from litellm import completion
+                            raw_completion = completion(
+                                model=buyer.model,
+                                messages=messages,
+                                max_tokens=1000,
+                                temperature=0.1
+                            )
+                            raw_response = raw_completion
+                        except Exception as direct_call_error:
+                            raw_response = f"Failed to get raw response: {str(direct_call_error)}"
                 except:
                     pass
                 

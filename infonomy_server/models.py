@@ -46,12 +46,19 @@ class LLMBuyerType(BaseModel):
     name: Optional[str] = "gpt-4o_basic"
     description: Optional[str] = "basic GPT-4o LLM buyer"
     model: str = "openrouter/openai/chatgpt-4o-latest"
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None  # Will be set to INSTRUCTIONS in __init__
     # chooser_model: str = "openrouter/openai/chatgpt-4o-latest"
     # chooser_system_prompt: str = "You are a helpful assistant."
     # decider_model: str = "openrouter/openai/chatgpt-4o-latest"
     # decider_system_prompt: str = "You are a helpful assistant."
     max_budget: float = 50.0
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Set default custom_prompt to INSTRUCTIONS if not provided
+        if self.custom_prompt is None:
+            from infonomy_server.llm import INSTRUCTIONS
+            self.custom_prompt = INSTRUCTIONS
 
 # class LLMContext(BaseModel):
 #     history: list["DecisionContext"] = []
