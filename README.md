@@ -37,11 +37,13 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
 - [ ] maybe let people other than original buyer also buy info offers
 - [ ] let user customize how many infooffers child llm should wait for
+- [ ] let DecisionContexts have "title" and "details"
 
 ### misc infra
 - [x] client library
 - [x] logging=True and better handling of LLM API fails
 - [ ] better logging of full inspection chain
+- [ ] notifications for InfoOffers received and inspections completed
 - [x] demo notebook
 - [ ] demo with a UI maybe
 - [ ] tests
