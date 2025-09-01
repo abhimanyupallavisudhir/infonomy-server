@@ -88,7 +88,7 @@ async def get_user_manager(user_db: SQLModelUserDatabase = Depends(get_user_db))
     yield UserManager(user_db)
 
 # Authentication backend
-bearer_transport = BearerTransport(tokenUrl="auth/jwt/login")
+bearer_transport = BearerTransport(tokenUrl="api/auth/jwt/login")
 # jwt_authentication = JWTAuthentication(
 #     secret=SECRET,
 #     lifetime_seconds=3600,
