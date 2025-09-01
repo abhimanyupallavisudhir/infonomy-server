@@ -5,7 +5,7 @@ from pydantic import BaseModel, model_validator
 from infonomy_server.models import DecisionContext, InfoOffer, LLMBuyerType, User
 from infonomy_server.logging_config import llm_logger, log_llm_call, log_function_call, log_function_return, log_function_error
 
-CLIENT = instructor.from_litellm(completion)
+CLIENT = instructor.from_litellm(completion, mode=instructor.Mode.JSON)
 
 
 class LLMResponse(BaseModel):
