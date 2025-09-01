@@ -15,21 +15,9 @@
             <nav class="nav-menu">
                 <a href="/questions" class="nav-link">Questions</a>
                 <a href="/users" class="nav-link">Users</a>
-                {% if user %}
-                    <a href="/users/{{ user.id }}" class="nav-link">My Profile</a>
-                    <form method="post" action="/api/auth/jwt/logout" style="display: inline;">
-                        <button type="submit" class="nav-button">Logout</button>
-                    </form>
-                {% else %}
-                    <div class="auth-forms">
-                        <form method="post" action="/api/auth/jwt/login" class="login-form">
-                            <input type="email" name="username" placeholder="Email" required>
-                            <input type="password" name="password" placeholder="Password" required>
-                            <button type="submit">Login</button>
-                        </form>
-                        <a href="/register" class="nav-link">Register</a>
-                    </div>
-                {% endif %}
+                <div id="auth-section">
+                    <!-- This will be populated by JavaScript -->
+                </div>
             </nav>
         </div>
     </header>
@@ -45,6 +33,89 @@
     </footer>
 
     <script src="/static/js/app.js"></script>
+    <script>
+        // Handle authentication state
+        function updateAuthSection() {
+            const authSection = document.getElementById('auth-section');
+            const token = localStorage.getItem('auth_token');
+            
+            if (token) {
+                // User is logged in
+                authSection.innerHTML = `
+                    <a href="/users/me" class="nav-link">My Profile</a>
+                    <button onclick="logout()" class="nav-button">Logout</button>
+                `;
+            } else {
+                // User is not logged in
+                authSection.innerHTML = `
+                    <div class="auth-forms">
+                        <form id="navbarLoginForm" class="login-form">
+                            <input type="email" name="username" placeholder="Email" required>
+                            <input type="password" name="password" placeholder="Password" required>
+                            <button type="submit">Login</button>
+                        </form>
+                        <a href="/register" class="nav-link">Register</a>
+                    </div>
+                `;
+                
+                // Add event listener to navbar login form
+                document.getElementById('navbarLoginForm').addEventListener('submit', handleNavbarLogin);
+            }
+        }
+        
+        function handleNavbarLogin(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = {
+                username: formData.get('username'),
+                password: formData.get('password')
+            };
+            
+            fetch('/api/auth/jwt/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.access_token) {
+                    localStorage.setItem('auth_token', result.access_token);
+                    updateAuthSection();
+                    window.location.reload();
+                } else {
+                    alert('Login failed');
+                }
+            })
+            .catch(error => {
+                alert('Login failed: ' + error.message);
+            });
+        }
+        
+        function logout() {
+            localStorage.removeItem('auth_token');
+            updateAuthSection();
+            window.location.href = '/';
+        }
+        
+        // Initialize auth section on page load
+        document.addEventListener('DOMContentLoaded', updateAuthSection);
+        
+        // Add token to all fetch requests
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            const token = localStorage.getItem('auth_token');
+            if (token && !options.headers) {
+                options.headers = {};
+            }
+            if (token && options.headers) {
+                options.headers['Authorization'] = `Bearer ${token}`;
+            }
+            return originalFetch(url, options);
+        };
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html> 

@@ -6,7 +6,8 @@ from typing import Optional, List
 from infonomy_server.database import get_db
 from infonomy_server.models import User, DecisionContext, InfoOffer, HumanBuyer, HumanSeller, BotSeller, SellerMatcher, MatcherInbox
 from infonomy_server.schemas import DecisionContextCreateNonRecursive, InfoOfferCreate, HumanBuyerCreate, HumanBuyerUpdate, BotSellerCreate, BotSellerUpdate, SellerMatcherCreate, SellerMatcherUpdate
-from infonomy_server.auth import current_active_user, current_user_optional
+from infonomy_server.auth import current_active_user
+from infonomy_server.auth_helpers import get_current_user_optional
 from infonomy_server.utils import get_context_for_buyer, recompute_inbox_for_context, increment_buyer_query_counter
 from datetime import datetime
 import json
@@ -18,7 +19,7 @@ templates = Jinja2Templates(directory="infonomy_server/templates")
 
 # Helper function to get user context
 async def get_user_context(request: Request, db: Session):
-    user = await current_user_optional(db)
+    user = await get_current_user_optional(request, db)
     return {
         "request": request,
         "user": user,
