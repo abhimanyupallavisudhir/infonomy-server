@@ -18,6 +18,7 @@ from infonomy_server.schemas import (
     InfoOfferUpdate,
 )
 from infonomy_server.auth import current_active_user
+from infonomy_server.logging_config import api_logger, log_business_event
 
 router = APIRouter(tags=["decision_contexts"])
 
@@ -33,14 +34,30 @@ def create_info_offer(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
+    # Log info offer creation start
+    log_business_event(api_logger, "info_offer_creation_started", user_id=current_user.id, parameters={
+        "context_id": context_id,
+        "price": info_offer.price,
+        "has_private_info": bool(info_offer.private_info),
+        "has_public_info": bool(info_offer.public_info)
+    })
+    
     # 1) Ensure the context exists
     ctx = db.get(DecisionContext, context_id)
     if not ctx:
+        log_business_event(api_logger, "info_offer_creation_failed", user_id=current_user.id, parameters={
+            "context_id": context_id,
+            "error": "context_not_found"
+        })
         raise HTTPException(status_code=404, detail="Decision context not found")
 
     # 2) Ensure the user is a seller with a profile
     human_seller = current_user.seller_profile
     if not human_seller:
+        log_business_event(api_logger, "info_offer_creation_failed", user_id=current_user.id, parameters={
+            "context_id": context_id,
+            "error": "user_not_seller"
+        })
         raise HTTPException(status_code=400, detail="User is not a seller")
 
     # 3) Create the InfoOffer
@@ -53,6 +70,14 @@ def create_info_offer(
     db.add(offer)
     db.commit()
     db.refresh(offer)
+    
+    # Log successful info offer creation
+    log_business_event(api_logger, "info_offer_created", user_id=current_user.id, parameters={
+        "context_id": context_id,
+        "info_offer_id": offer.id,
+        "price": offer.price,
+        "human_seller_id": human_seller.id
+    })
 
     # 4) Mark any matching inbox items as "responded"
     matcher_ids = [m.id for m in human_seller.matchers]

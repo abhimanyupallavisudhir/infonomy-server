@@ -15,6 +15,7 @@ from infonomy_server.schemas import (
     SellerMatcherUpdate,
 )
 from infonomy_server.auth import current_active_user
+from infonomy_server.logging_config import bot_sellers_logger, log_business_event
 from typing import List
 from infonomy_server.utils import (
     recompute_inbox_for_matcher, 
@@ -30,6 +31,13 @@ def create_bot_seller(
     current_user: User = Depends(current_active_user),
 ):
     """Create a new BotSeller for the current user"""
+    # Log bot seller creation start
+    log_business_event(bot_sellers_logger, "bot_seller_creation_started", user_id=current_user.id, parameters={
+        "bot_seller_type": "fixed_text" if bot_seller.info else "llm",
+        "has_llm_model": bool(bot_seller.llm_model),
+        "has_llm_prompt": bool(bot_seller.llm_prompt)
+    })
+    
     # Check if user has a seller profile (either HumanSeller or existing BotSellers)
     # First check for HumanSeller
     from infonomy_server.models import HumanSeller
@@ -44,6 +52,9 @@ def create_bot_seller(
         ).first()
         
         if not existing_bot_seller:
+            log_business_event(bot_sellers_logger, "bot_seller_creation_failed", user_id=current_user.id, parameters={
+                "error": "no_seller_profile"
+            })
             raise HTTPException(
                 status_code=400, 
                 detail="User must have a seller profile to create BotSellers"
@@ -53,6 +64,14 @@ def create_bot_seller(
     db.add(db_bot_seller)
     db.commit()
     db.refresh(db_bot_seller)
+    
+    # Log successful bot seller creation
+    log_business_event(bot_sellers_logger, "bot_seller_created", user_id=current_user.id, parameters={
+        "bot_seller_id": db_bot_seller.id,
+        "bot_seller_type": "fixed_text" if db_bot_seller.info else "llm",
+        "llm_model": db_bot_seller.llm_model
+    })
+    
     return db_bot_seller
 
 @router.get("/", response_model=List[BotSellerRead])

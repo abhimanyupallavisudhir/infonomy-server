@@ -33,6 +33,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             # Try to get user from request state (set by auth middleware)
             if hasattr(request.state, 'user') and request.state.user:
                 user_id = request.state.user.id
+            else:
+                # Try to extract user ID from JWT token in Authorization header
+                auth_header = request.headers.get('authorization', '')
+                if auth_header.startswith('Bearer '):
+                    token = auth_header.split(' ')[1]
+                    import jwt
+                    from infonomy_server.config import SECRET_KEY
+                    try:
+                        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+                        user_id = int(payload.get('sub', 0)) if payload.get('sub') else None
+                    except (jwt.InvalidTokenError, ValueError, KeyError):
+                        pass
         except Exception:
             pass
         

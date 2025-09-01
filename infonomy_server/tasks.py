@@ -30,15 +30,15 @@ from infonomy_server.logging_config import (
 )
 
 
-@celery.task
-def process_bot_sellers_for_context(context_id: int):
+@celery.task(bind=True)
+def process_bot_sellers_for_context(self, context_id: int):
     """
     Process all BotSellers that have matchers matching a DecisionContext.
     This task is called when a DecisionContext is submitted to seller inboxes.
     """
     
     # Log task start
-    task_id = process_bot_sellers_for_context.request.id if hasattr(process_bot_sellers_for_context.request, 'id') else 'unknown'
+    task_id = self.request.id if hasattr(self.request, 'id') else 'unknown'
     log_celery_task(celery_logger, "process_bot_sellers_for_context", task_id, {
         "context_id": context_id
     })
@@ -79,11 +79,13 @@ def process_bot_sellers_for_context(context_id: int):
                     session.add(info_offer)
                     processed_count += 1
                     
-                    log_business_event(bot_sellers_logger, "bot_seller_offer_created", parameters={
+                    log_business_event(bot_sellers_logger, "bot_seller_offer_created", user_id=bot_seller.user_id, parameters={
                         "bot_seller_id": bot_seller.id,
                         "context_id": context_id,
                         "info_offer_id": info_offer.id,
-                        "matcher_id": matcher.id
+                        "matcher_id": matcher.id,
+                        "offer_price": info_offer.price,
+                        "bot_seller_type": "fixed_text" if bot_seller.info else "llm"
                     })
             except Exception as e:
                 # Log error but continue processing other bots

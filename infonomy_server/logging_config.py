@@ -124,16 +124,24 @@ def log_with_context(logger: logging.Logger, level: int, message: str,
                     exception: Optional[Exception] = None):
     """Log a message with detailed context information."""
     
-    # Get caller information
-    frame = inspect.currentframe().f_back
-    if frame:
-        filename = os.path.basename(frame.f_code.co_filename)
-        line_number = frame.f_lineno
-        function_name = frame.f_code.co_name
-    else:
-        filename = "unknown"
-        line_number = 0
-        function_name = "unknown"
+    # Get caller information with improved detection
+    filename = "unknown"
+    line_number = 0
+    function_name = "unknown"
+    
+    # Walk up the call stack to find the actual caller
+    frame = inspect.currentframe()
+    while frame:
+        frame = frame.f_back
+        if frame:
+            # Skip logging-related frames
+            frame_filename = frame.f_code.co_filename
+            if ('logging_config.py' not in frame_filename and 
+                'middleware.py' not in frame_filename):
+                filename = os.path.basename(frame_filename)
+                line_number = frame.f_lineno
+                function_name = frame.f_code.co_name
+                break
     
     # Create log record with extra attributes
     extra = {

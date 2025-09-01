@@ -17,6 +17,7 @@ from infonomy_server.schemas import (
     SellerMatcherCreate,
 )
 from infonomy_server.auth import current_active_user
+from infonomy_server.logging_config import api_logger, log_business_event
 from typing import List
 from infonomy_server.utils import (
     get_context_for_buyer, 
@@ -33,6 +34,12 @@ def create_human_buyer(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
+    # Log buyer profile creation
+    log_business_event(api_logger, "buyer_profile_created", user_id=current_user.id, parameters={
+        "default_max_budget": human_buyer.default_max_budget,
+        "has_default_child_llm": bool(human_buyer.default_child_llm)
+    })
+    
     db_human_buyer = HumanBuyer(**human_buyer.dict(), id=current_user.id)
     db.add(db_human_buyer)
     db.commit()
@@ -76,11 +83,17 @@ def update_current_human_buyer(
 def create_human_seller(
     db: Session = Depends(get_db), current_user: User = Depends(current_active_user)
 ):
+    # Log seller profile creation start
+    log_business_event(api_logger, "seller_profile_creation_started", user_id=current_user.id, parameters={})
+    
     # Ensure the user does not already have a seller profile
     existing_seller = db.exec(
         select(HumanSeller).where(HumanSeller.id == current_user.id)
     ).first()
     if existing_seller:
+        log_business_event(api_logger, "seller_profile_creation_failed", user_id=current_user.id, parameters={
+            "error": "profile_already_exists"
+        })
         raise HTTPException(status_code=400, detail="User already has a seller profile")
 
     # Create the new HumanSeller profile
@@ -88,6 +101,12 @@ def create_human_seller(
     db.add(human_seller)
     db.commit()
     db.refresh(human_seller)
+    
+    # Log successful seller profile creation
+    log_business_event(api_logger, "seller_profile_created", user_id=current_user.id, parameters={
+        "seller_id": human_seller.id
+    })
+    
     return human_seller
 
 

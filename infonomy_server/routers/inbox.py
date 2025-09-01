@@ -12,6 +12,7 @@ from infonomy_server.models import (
 )
 from infonomy_server.schemas import DecisionContextRead
 from infonomy_server.auth import current_active_user
+from infonomy_server.logging_config import api_logger, log_business_event
 
 router = APIRouter(tags=["inbox"])
 
@@ -55,11 +56,25 @@ def read_decision_contexts_for_seller(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
+    # Log inbox access
+    log_business_event(api_logger, "inbox_accessed", user_id=current_user.id, parameters={
+        "seller_id": seller_id,
+        "requested_seller_id": seller_id
+    })
+    
     # 1) Load the seller (must be a HumanSeller)
     seller = db.get(HumanSeller, seller_id)
     if not seller or not isinstance(seller, HumanSeller):
+        log_business_event(api_logger, "inbox_access_failed", user_id=current_user.id, parameters={
+            "seller_id": seller_id,
+            "error": "seller_not_found"
+        })
         raise HTTPException(status_code=404, detail="Seller not found")
     if seller.id != current_user.id:
+        log_business_event(api_logger, "inbox_access_failed", user_id=current_user.id, parameters={
+            "seller_id": seller_id,
+            "error": "unauthorized_access"
+        })
         raise HTTPException(
             status_code=403, detail="Not allowed to view this seller's inbox"
         )
@@ -67,6 +82,10 @@ def read_decision_contexts_for_seller(
     # 2) Collect all matcher IDs for this seller
     matcher_ids = [m.id for m in seller.matchers]
     if not matcher_ids:
+        log_business_event(api_logger, "inbox_empty", user_id=current_user.id, parameters={
+            "seller_id": seller_id,
+            "matcher_count": 0
+        })
         return []
 
     # 3) Fetch all NEW DecisionContexts via the inbox table
@@ -77,5 +96,13 @@ def read_decision_contexts_for_seller(
         .where(MatcherInbox.status == "new")
     )
     results = db.exec(stmt).all()
+    
+    # Log successful inbox access
+    log_business_event(api_logger, "inbox_retrieved", user_id=current_user.id, parameters={
+        "seller_id": seller_id,
+        "context_count": len(results),
+        "matcher_count": len(matcher_ids)
+    })
+    
     return results
 
