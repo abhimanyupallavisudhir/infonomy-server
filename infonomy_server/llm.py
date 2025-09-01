@@ -9,27 +9,31 @@ CLIENT = instructor.from_litellm(completion, mode=instructor.Mode.JSON)
 
 
 class LLMResponse(BaseModel):
-    chosen_offer_ids: Optional[List[int]]
-    followup_query: Optional[str]
-    followup_query_budget: Optional[float]
+    chosen_offer_ids: Optional[List[int]] = None
+    followup_query: Optional[str] = None
+    followup_query_budget: Optional[float] = None
     followup_query_human_seller_ids: Optional[List[int]] = None
     followup_query_bot_seller_ids: Optional[List[int]] = None
 
-    @model_validator(mode="before")
+    @model_validator(mode="after")
     def exactly_one(cls, self):
-        assert (self.chosen_offer_ids is not None) != (
-            self.followup_query is not None
-        ), "Exactly one of chosen_offer_ids or followup_query must be provided"
-        assert (self.followup_query is None) == (self.followup_query_budget is None), (
-            "Iff followup_query is provided, then followup_query_budget must also be provided"
-        )
-        assert (self.followup_query is None) == (
-            (self.followup_human_seller_ids is None)
-            and (self.followup_bot_seller_ids is None)
-        ), (
-            "Iff followup_query is provided, then followup_human_seller_ids or followup_bot_seller_ids must be provided"
-        )
-
+        # Check that exactly one of chosen_offer_ids or followup_query is provided
+        has_chosen = self.chosen_offer_ids is not None and len(self.chosen_offer_ids) > 0
+        has_followup = self.followup_query is not None and self.followup_query.strip() != ""
+        
+        if not has_chosen and not has_followup:
+            # If both are None/empty, try to provide a helpful error message
+            if self.chosen_offer_ids is None and self.followup_query is None:
+                raise ValueError("LLM returned a response with all None values. This usually means the LLM didn't follow the JSON format instructions.")
+            else:
+                raise ValueError("Either chosen_offer_ids or followup_query must be provided")
+        if has_chosen and has_followup:
+            raise ValueError("Cannot provide both chosen_offer_ids and followup_query")
+        
+        # If followup_query is provided, followup_query_budget must also be provided
+        if has_followup and self.followup_query_budget is None:
+            raise ValueError("followup_query_budget must be provided when followup_query is provided")
+        
         return self
 
 
@@ -50,14 +54,24 @@ whether to purchase or not. You must evaluate each based on whether it will be u
 its price. This means estimating whether you think this information will actually be novel to the buyer, and affect
 their decision.
 
-You may return either:
-- chosen_offer_ids: a list of IDs of the offers you want to purchase, or
-- A followup_query and corresponding followup_query_budget: 
-a query that you want to ask, if you need further information to make a decision. This query could even be
-an empty string or simply "Should I buy this?", if you just want to see if someone can provide some context on the info being
-offered. You can also optionally specify followup_query_human_seller_ids or followup_query_bot_seller_ids, e.g. if you want to 
-direct the followup query to the specific sellers of the offers you are inspecting. Otherwise your query will be sent to all
-sellers in the market.
+You must respond with a JSON object that contains exactly one of the following:
+
+Option 1 - Choose to buy offers:
+{
+  "chosen_offer_ids": [1, 2, 3]  // List of offer IDs you want to purchase
+}
+
+Option 2 - Ask a follow-up question:
+{
+  "followup_query": "Your question here",
+  "followup_query_budget": 10.0  // Budget for this follow-up query (must be <= max_budget)
+}
+
+You can also optionally include:
+- "followup_query_human_seller_ids": [1, 2]  // Specific human sellers to ask
+- "followup_query_bot_seller_ids": [3, 4]    // Specific bot sellers to ask
+
+The followup_query could even be an empty string or simply "Should I buy this?", if you just want to see if someone can provide some context on the info being offered.
 
 NOTE: Although we use the term "information", these InfoOffers aren't verified information --- just any string of text, that
 any participant in the market can offer. So you should not assume that the information is true or useful, and you should evaluate
@@ -145,6 +159,10 @@ def call_llm(
     used_budget = sum(io.price for io in known_info)
     messages = [
         {
+            "role": "system",
+            "content": "You are an information buyer. You MUST respond with valid JSON only. Do not include any text before or after the JSON. The JSON must contain exactly one of the two options specified in the user message."
+        },
+        {
             "role": "user",
             "content": prompt.format(
                 ctx_str=render_decision_context(context),
@@ -215,6 +233,26 @@ def call_llm(
             except Exception as e:
                 end_time = time.time()
                 
+                # Try to get the raw response for debugging
+                raw_response = None
+                try:
+                    # Try to get the raw response from the exception
+                    if hasattr(e, 'response') and e.response:
+                        raw_response = e.response
+                    elif hasattr(e, 'raw_response'):
+                        raw_response = e.raw_response
+                    elif hasattr(e, 'args') and e.args:
+                        # Sometimes the raw response is in the exception args
+                        for arg in e.args:
+                            if isinstance(arg, dict) and 'choices' in arg:
+                                raw_response = arg
+                                break
+                            elif isinstance(arg, str) and ('{' in arg or '[' in arg):
+                                raw_response = arg
+                                break
+                except:
+                    pass
+                
                 # Log failed LLM call
                 log_llm_call(llm_logger, buyer.model, len(str(messages)), 
                             0, end_time - start_time, {
@@ -226,6 +264,7 @@ def call_llm(
                                 "status": "failed",
                                 "error": str(e),
                                 "error_type": type(e).__name__,
+                                "raw_response": str(raw_response) if raw_response else None,
                                 "messages": logged_messages,
                                 "env_vars": env_vars
                             })
