@@ -1,3 +1,0 @@
-2025-08-31T17:41:17.833116 | INFO     | llm                  | logging_config.py:226          | log_llm_call              | {"model": "gpt-4", "prompt_length": 1000, "response_length": 500, "duration_ms": 2500.0, "context_id": 456, "user_id": 123} | LLM Call
-2025-08-31T18:05:56.197957 | INFO     | llm                  | unknown:0                      | unknown                   | {"model": "gpt-4", "prompt_length": 1000, "response_length": 500, "duration_ms": 2500.0, "context_id": 456, "user_id": 789} | LLM Call
-2025-08-31T18:06:10.932859 | INFO     | llm                  | test_logging_fixes.py:47       | test_improved_logging     | {"model": "gpt-4", "prompt_length": 1000, "response_length": 500, "duration_ms": 2500.0, "context_id": 456, "user_id": 789} | LLM Call

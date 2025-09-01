@@ -14,3 +14,6 @@ wheels/
 *.db-shm
 *.db-wal
 *.rdb
+
+# logs
+# .logs/

@@ -167,21 +167,41 @@ def call_llm(
         with temporary_api_keys(api_keys):
             import time
             start_time = time.time()
-            response = CLIENT.chat.completions.create(
-                model=buyer.model,
-                response_model=LLMResponse,
-                messages=messages,
-            )
-            end_time = time.time()
-            
-            # Log LLM call
-            log_llm_call(llm_logger, buyer.model, len(str(messages)), 
-                        len(str(response)), end_time - start_time, {
-                            "context_id": context.id,
-                            "buyer_id": buyer.id,
-                            "user_id": user.id if user else None,
-                            "iteration": "retry" if len(messages) > 1 else "initial"
-                        })
+            try:
+                response = CLIENT.chat.completions.create(
+                    model=buyer.model,
+                    response_model=LLMResponse,
+                    messages=messages,
+                )
+                end_time = time.time()
+                
+                # Log successful LLM call
+                log_llm_call(llm_logger, buyer.model, len(str(messages)), 
+                            len(str(response)), end_time - start_time, {
+                                "context_id": context.id,
+                                "buyer_model": buyer.model,
+                                "buyer_name": buyer.name,
+                                "user_id": user.id if user else None,
+                                "iteration": "retry" if len(messages) > 1 else "initial",
+                                "status": "success"
+                            })
+            except Exception as e:
+                end_time = time.time()
+                
+                # Log failed LLM call
+                log_llm_call(llm_logger, buyer.model, len(str(messages)), 
+                            0, end_time - start_time, {
+                                "context_id": context.id,
+                                "buyer_model": buyer.model,
+                                "buyer_name": buyer.name,
+                                "user_id": user.id if user else None,
+                                "iteration": "retry" if len(messages) > 1 else "initial",
+                                "status": "failed",
+                                "error": str(e),
+                                "error_type": type(e).__name__
+                            })
+                # Re-raise the exception
+                raise
         if response.chosen_offer_ids:
             # check that chosen IDs are a subset of available offers
             chosen_ids = set(response.chosen_offer_ids)

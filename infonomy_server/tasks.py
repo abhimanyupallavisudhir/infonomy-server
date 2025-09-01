@@ -249,28 +249,51 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
         
         with temporary_api_keys(api_keys):
             start_time = time.time()
-            response = CLIENT.chat.completions.create(
-                model=bot_seller.llm_model,
-                response_model=BotSellerResponse,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=DEFAULT_LLM_MAX_TOKENS,
-                temperature=DEFAULT_LLM_TEMPERATURE
-            )
-            end_time = time.time()
-            
-            # Log LLM call
-            from infonomy_server.logging_config import log_llm_call
-            log_llm_call(bot_sellers_logger, bot_seller.llm_model, len(prompt), 
-                        len(str(response)), end_time - start_time, {
-                            "bot_seller_id": bot_seller.id,
-                            "context_id": context.id,
-                            "user_id": bot_seller.user_id
-                        })
+            try:
+                response = CLIENT.chat.completions.create(
+                    model=bot_seller.llm_model,
+                    response_model=BotSellerResponse,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=DEFAULT_LLM_MAX_TOKENS,
+                    temperature=DEFAULT_LLM_TEMPERATURE
+                )
+                end_time = time.time()
+                
+                # Log successful LLM call
+                from infonomy_server.logging_config import log_llm_call
+                log_llm_call(bot_sellers_logger, bot_seller.llm_model, len(prompt), 
+                            len(str(response)), end_time - start_time, {
+                                "bot_seller_id": bot_seller.id,
+                                "context_id": context.id,
+                                "user_id": bot_seller.user_id,
+                                "status": "success"
+                            })
+            except Exception as e:
+                end_time = time.time()
+                
+                # Log failed LLM call
+                from infonomy_server.logging_config import log_llm_call
+                log_llm_call(bot_sellers_logger, bot_seller.llm_model, len(prompt), 
+                            0, end_time - start_time, {
+                                "bot_seller_id": bot_seller.id,
+                                "context_id": context.id,
+                                "user_id": bot_seller.user_id,
+                                "status": "failed",
+                                "error": str(e),
+                                "error_type": type(e).__name__
+                            })
+                # Re-raise the exception
+                raise
         
         return response.private_info, response.public_info, response.price
         
     except Exception as e:
-        print(f"Error calling LLM for BotSeller {bot_seller.id}: {str(e)}")
+        # Log the error
+        log_function_error(bot_sellers_logger, "_generate_bot_seller_offer", e, {
+            "bot_seller_id": bot_seller.id,
+            "context_id": context.id,
+            "user_id": bot_seller.user_id
+        })
         # Return fallback values if LLM call fails
         fallback_info = f"Error generating information: {str(e)}"
         return fallback_info, "Information temporarily unavailable", 0.0
@@ -507,5 +530,16 @@ def inspect_task(
         
         return purchased
         
+    except Exception as e:
+        # Log the error
+        log_function_error(celery_logger, "inspect_task", e, {
+            "context_id": context_id,
+            "buyer_id": buyer_id,
+            "depth": depth,
+            "breadth": breadth,
+            "task_id": self.request.id if hasattr(self.request, 'id') else 'unknown'
+        })
+        # Re-raise the exception so Celery can handle it
+        raise
     finally:
         session.close()
