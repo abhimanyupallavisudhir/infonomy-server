@@ -21,6 +21,7 @@ from infonomy_server.models import (
     MatcherInbox,
     BotSeller,
     User,
+    LLMBuyerType,
 )
 
 
@@ -318,7 +319,7 @@ def inspect_task(
             context=ctx, 
             offers=offers, 
             known_info=known_info, 
-            buyer=buyer.default_child_llm,
+            buyer=LLMBuyerType(**buyer.default_child_llm),
             user=user
         )
 

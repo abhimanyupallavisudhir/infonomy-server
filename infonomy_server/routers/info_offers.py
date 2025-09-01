@@ -218,6 +218,69 @@ def read_info_offers_for_decision_context(
 
     return result
 
+@router.get(
+    "/questions/{context_id}/answers_private",
+    response_model=List[InfoOfferReadPrivate],
+    status_code=status.HTTP_200_OK,
+)
+def read_info_offers_private_for_decision_context(
+    context_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    # 1) Verify context exists
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Decision context not found")
+
+    # 2) Load all offers for that context
+    offers = db.exec(select(InfoOffer).where(InfoOffer.context_id == context_id)).all()
+
+    # 3) For each offer, only return those whose private info is available to the current user
+    result: List[InfoOfferReadPrivate] = []
+    for offer in offers:
+        is_seller = (offer.seller.type == "human_seller" and offer.seller.id == current_user.id)
+        is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
+
+        if is_seller:
+            # seller sees the full private schema
+            result.append(InfoOfferReadPrivate.from_orm(offer))
+        elif is_buyer_who_purchased:
+            # buyer after purchase sees the public schema
+            result.append(InfoOfferReadPrivate.from_orm(offer))
+        
+    return result    
+
+@router.get(
+    "/questions/{context_id}/answers_public",
+    response_model=List[InfoOfferReadPublic],
+    status_code=status.HTTP_200_OK,
+)
+def read_info_offers_public_for_decision_context(
+    context_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user),
+):
+    # 1) Verify context exists
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Decision context not found")
+
+    # 2) Load all offers for that context
+    offers = db.exec(select(InfoOffer).where(InfoOffer.context_id == context_id)).all()
+
+    # 3) For each offer, only return those whose private info is available to the current user
+    result: List[InfoOfferReadPrivate] = []
+    for offer in offers:
+        is_seller = (offer.seller.type == "human_seller" and offer.seller.id == current_user.id)
+        is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
+
+        if not is_seller and not is_buyer_who_purchased:
+            result.append(InfoOfferReadPublic.from_orm(offer))
+        
+    return result    
+
+
 
 @router.get(
     "/users/me/answers",
