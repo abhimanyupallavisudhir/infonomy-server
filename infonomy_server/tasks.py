@@ -248,12 +248,38 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
         from infonomy_server.llm import CLIENT
         
         with temporary_api_keys(api_keys):
+            import os
             start_time = time.time()
+            
+            # Get all environment variables (within the context manager)
+            env_vars = {}
+            for key_name, key_value in os.environ.items():
+                if key_value and len(key_value) > 12:
+                    # Truncate long values for security (show first 8 and last 4 characters)
+                    env_vars[key_name] = f"{key_value[:8]}...{key_value[-4:]}"
+                else:
+                    env_vars[key_name] = key_value
+            
+            # Prepare messages for logging (truncate content for readability)
+            def truncate_content(content, max_length=200):
+                if isinstance(content, str) and len(content) > max_length:
+                    return content[:max_length] + "..."
+                return content
+            
+            messages = [{"role": "user", "content": prompt}]
+            logged_messages = []
+            for msg in messages:
+                logged_msg = {
+                    "role": msg.get("role", "unknown"),
+                    "content": truncate_content(msg.get("content", ""))
+                }
+                logged_messages.append(logged_msg)
+            
             try:
                 response = CLIENT.chat.completions.create(
                     model=bot_seller.llm_model,
                     response_model=BotSellerResponse,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     max_tokens=DEFAULT_LLM_MAX_TOKENS,
                     temperature=DEFAULT_LLM_TEMPERATURE
                 )
@@ -266,7 +292,9 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
                                 "bot_seller_id": bot_seller.id,
                                 "context_id": context.id,
                                 "user_id": bot_seller.user_id,
-                                "status": "success"
+                                "status": "success",
+                                "messages": logged_messages,
+                                "env_vars": env_vars
                             })
             except Exception as e:
                 end_time = time.time()
@@ -280,7 +308,9 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
                                 "user_id": bot_seller.user_id,
                                 "status": "failed",
                                 "error": str(e),
-                                "error_type": type(e).__name__
+                                "error_type": type(e).__name__,
+                                "messages": logged_messages,
+                                "env_vars": env_vars
                             })
                 # Re-raise the exception
                 raise
