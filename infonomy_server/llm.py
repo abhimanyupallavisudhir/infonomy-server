@@ -135,7 +135,7 @@ def call_llm(
         "context_id": context.id,
         "offers_count": len(offers),
         "known_info_count": len(known_info),
-        "buyer_id": buyer.id,
+        "buyer": buyer.dict(),
         "user_id": user.id if user else None,
         "max_budget": context.max_budget,
         "used_budget": sum(io.price for io in known_info)
