@@ -59,9 +59,9 @@ def read_decision_contexts_for_seller(
     seller = db.get(HumanSeller, seller_id)
     if not seller or not isinstance(seller, HumanSeller):
         raise HTTPException(status_code=404, detail="Seller not found")
-    if seller.user_id != current_user.id:
+    if seller.id != current_user.id:
         raise HTTPException(
-            status_code=403, detail="Not allowed to view this seller’s inbox"
+            status_code=403, detail="Not allowed to view this seller's inbox"
         )
 
     # 2) Collect all matcher IDs for this seller
