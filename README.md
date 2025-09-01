@@ -32,7 +32,6 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] payments
 - [ ] better solution than letting people put their API keys (which allows leakage)
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
-- [ ] logging=True and better handling of LLM API fails
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
@@ -41,7 +40,10 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 
 ### misc infra
 - [x] client library
-- [ ] demo
+- [x] logging=True and better handling of LLM API fails
+- [ ] better logging of full inspection chain
+- [x] demo notebook
+- [ ] demo with a UI maybe
 - [ ] tests
 
 ### important development
