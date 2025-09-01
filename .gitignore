@@ -16,4 +16,4 @@ wheels/
 *.rdb
 
 # logs
-# .logs/
+.logs/
