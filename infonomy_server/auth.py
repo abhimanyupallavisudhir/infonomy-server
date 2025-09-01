@@ -111,3 +111,10 @@ fastapi_users = FastAPIUsers[User, int](get_user_manager, [auth_backend])
 # Dependencies
 current_active_user = fastapi_users.current_user(active=True)
 current_superuser = fastapi_users.current_user(active=True, superuser=True)
+
+async def current_user_optional(db: Session) -> Optional[User]:
+    """Get current user if authenticated, None otherwise"""
+    try:
+        return await current_active_user(db)
+    except:
+        return None

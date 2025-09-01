@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Information Market Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title">Information Market Platform</h1>
+    
+    {% if user %}
+        <div class="new-question-form">
+            <h2>Ask a New Question</h2>
+            <form method="post" action="/questions">
+                <div class="form-group">
+                    <label for="query">Question:</label>
+                    <textarea name="query" id="query" rows="3" placeholder="What information do you need?" required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="context_pages">Context Pages (comma-separated):</label>
+                    <input type="text" name="context_pages" id="context_pages" placeholder="page1, page2, page3">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="max_budget">Maximum Budget:</label>
+                        <input type="number" name="max_budget" id="max_budget" step="0.01" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="priority">Priority:</label>
+                        <select name="priority" id="priority">
+                            <option value="0">Low</option>
+                            <option value="1">Medium</option>
+                            <option value="2">High</option>
+                            <option value="3">Urgent</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Post Question</button>
+            </form>
+        </div>
+    {% else %}
+        <div class="welcome-message">
+            <p>Welcome to the Information Market Platform! Please <a href="/login">login</a> or <a href="/register">register</a> to start asking questions and providing answers.</p>
+        </div>
+    {% endif %}
+    
+    <div class="recent-questions">
+        <h2>Recent Questions</h2>
+        {% if questions %}
+            <div class="questions-list">
+                {% for question in questions %}
+                    <div class="question-card">
+                        <div class="question-header">
+                            <h3><a href="/questions/{{ question.id }}">{{ question.query or "No title" }}</a></h3>
+                            <span class="question-meta">
+                                Budget: ${{ "%.2f"|format(question.max_budget) }} | 
+                                Priority: {{ question.priority }} | 
+                                {{ question.created_at.strftime('%Y-%m-%d %H:%M') }}
+                            </span>
+                        </div>
+                        {% if question.context_pages %}
+                            <div class="context-pages">
+                                <strong>Context:</strong> {{ question.context_pages|join(', ') }}
+                            </div>
+                        {% endif %}
+                        <div class="question-footer">
+                            <a href="/questions/{{ question.id }}" class="btn btn-secondary">View Details</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>No questions yet. Be the first to ask!</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

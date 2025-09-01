@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}{{ profile_user.username }}'s Profile - Information Market Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="user-profile">
+        <div class="profile-header">
+            <h1 class="profile-title">{{ profile_user.username }}'s Profile</h1>
+            <div class="profile-meta">
+                <span class="balance">Balance: ${{ "%.2f"|format(profile_user.balance) }}</span>
+                <span class="member-since">Member since: {{ profile_user.created_at.strftime('%Y-%m-%d') }}</span>
+            </div>
+        </div>
+        
+        {% if is_own_profile %}
+            <div class="profile-tabs">
+                <button class="tab-btn active" onclick="showTab('buyer')">Buyer Profile</button>
+                <button class="tab-btn" onclick="showTab('seller')">Seller Profile</button>
+                <button class="tab-btn" onclick="showTab('matchers')">Matchers</button>
+                <button class="tab-btn" onclick="showTab('bot-sellers')">Bot Sellers</button>
+                <button class="tab-btn" onclick="showTab('inbox')">Inbox</button>
+                <button class="tab-btn" onclick="showTab('purchased')">Purchased Info</button>
+            </div>
+            
+            <div class="tab-content">
+                <!-- Buyer Profile Tab -->
+                <div id="buyer-tab" class="tab-pane active">
+                    <h3>Buyer Profile</h3>
+                    {% if profile_user.buyer_profile %}
+                        <div class="current-profile">
+                            <p><strong>Default Child LLM:</strong> {{ profile_user.buyer_profile.default_child_llm.name }}</p>
+                            <p><strong>Default Max Budget:</strong> ${{ "%.2f"|format(profile_user.buyer_profile.default_max_budget) }}</p>
+                        </div>
+                    {% endif %}
+                    
+                    <form method="post" action="/profile/buyer" class="profile-form">
+                        <div class="form-group">
+                            <label for="default_child_llm">Default Child LLM:</label>
+                            <select name="default_child_llm" id="default_child_llm" required>
+                                <option value="gpt-4">GPT-4</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                <option value="claude-3">Claude 3</option>
+                                <option value="claude-2">Claude 2</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="default_max_budget">Default Max Budget:</label>
+                            <input type="number" name="default_max_budget" id="default_max_budget" step="0.01" min="0" 
+                                   value="{{ profile_user.buyer_profile.default_max_budget if profile_user.buyer_profile else 0.00 }}" required>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            {% if profile_user.buyer_profile %}Update{% else %}Create{% endif %} Buyer Profile
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Seller Profile Tab -->
+                <div id="seller-tab" class="tab-pane">
+                    <h3>Seller Profile</h3>
+                    {% if profile_user.seller_profile %}
+                        <p>Seller profile exists with {{ profile_user.seller_profile.matchers|length }} matchers.</p>
+                    {% else %}
+                        <p>No seller profile yet. Create one by adding matchers below.</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Matchers Tab -->
+                <div id="matchers-tab" class="tab-pane">
+                    <h3>Matchers</h3>
+                    {% if profile_user.seller_profile %}
+                        <div class="matchers-list">
+                            {% for matcher in profile_user.seller_profile.matchers %}
+                                <div class="matcher-item">
+                                    <strong>Keywords:</strong> {{ matcher.keywords|join(', ') if matcher.keywords else 'None' }}<br>
+                                    <strong>Min Budget:</strong> ${{ "%.2f"|format(matcher.min_max_budget) }}<br>
+                                    <strong>Min Priority:</strong> {{ matcher.min_priority }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <h4>Add New Matcher</h4>
+                        <form method="post" action="/profile/matcher" class="profile-form">
+                            <div class="form-group">
+                                <label for="keywords">Keywords (comma-separated):</label>
+                                <input type="text" name="keywords" id="keywords" placeholder="keyword1, keyword2">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="context_pages">Context Pages (comma-separated):</label>
+                                <input type="text" name="context_pages" id="context_pages" placeholder="page1, page2">
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="min_max_budget">Min Max Budget:</label>
+                                    <input type="number" name="min_max_budget" id="min_max_budget" step="0.01" min="0" value="0.00">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="min_priority">Min Priority:</label>
+                                    <input type="number" name="min_priority" id="min_priority" min="0" value="0">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">Add Matcher</button>
+                        </form>
+                    {% else %}
+                        <p>Create a seller profile first by adding a matcher.</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Bot Sellers Tab -->
+                <div id="bot-sellers-tab" class="tab-pane">
+                    <h3>Bot Sellers</h3>
+                    {% if profile_user.bot_sellers %}
+                        <div class="bot-sellers-list">
+                            {% for bot in profile_user.bot_sellers %}
+                                <div class="bot-seller-item">
+                                    <strong>Info:</strong> {{ bot.info or 'None' }}<br>
+                                    <strong>Price:</strong> ${{ "%.2f"|format(bot.price) if bot.price else 'Free' }}<br>
+                                    <strong>LLM Model:</strong> {{ bot.llm_model or 'Default' }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <h4>Create New Bot Seller</h4>
+                    <form method="post" action="/profile/bot-seller" class="profile-form">
+                        <div class="form-group">
+                            <label for="info">Bot Info:</label>
+                            <textarea name="info" id="info" rows="3" placeholder="Description of what this bot does"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="price">Price:</label>
+                            <input type="number" name="price" id="price" step="0.01" min="0" value="0.00">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="llm_model">LLM Model:</label>
+                            <input type="text" name="llm_model" id="llm_model" placeholder="gpt-4, claude-3, etc.">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="llm_prompt">LLM Prompt:</label>
+                            <textarea name="llm_prompt" id="llm_prompt" rows="3" placeholder="System prompt for the bot"></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">Create Bot Seller</button>
+                    </form>
+                </div>
+                
+                <!-- Inbox Tab -->
+                <div id="inbox-tab" class="tab-pane">
+                    <h3>Inbox</h3>
+                    <p>Inbox functionality will be implemented here.</p>
+                </div>
+                
+                <!-- Purchased Info Tab -->
+                <div id="purchased-tab" class="tab-pane">
+                    <h3>Purchased Information</h3>
+                    <p>Purchased information will be displayed here.</p>
+                </div>
+            </div>
+        {% else %}
+            <!-- Public profile view -->
+            <div class="public-profile">
+                <div class="profile-section">
+                    <h3>Questions Asked</h3>
+                    {% if questions %}
+                        <div class="questions-list">
+                            {% for question in questions %}
+                                <div class="question-item">
+                                    <a href="/questions/{{ question.id }}">{{ question.query or "No title" }}</a>
+                                    <span class="meta">${{ "%.2f"|format(question.max_budget) }} | {{ question.created_at.strftime('%Y-%m-%d') }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p>No questions asked yet.</p>
+                    {% endif %}
+                </div>
+                
+                <div class="profile-section">
+                    <h3>Answers Provided</h3>
+                    {% if answers %}
+                        <div class="answers-list">
+                            {% for answer in answers %}
+                                <div class="answer-item">
+                                    <a href="/questions/{{ answer.context_id }}">View Question</a>
+                                    <span class="meta">${{ "%.2f"|format(answer.price) }} | {{ answer.created_at.strftime('%Y-%m-%d') }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p>No answers provided yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(tabName) {
+    // Hide all tab panes
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    tabPanes.forEach(pane => pane.classList.remove('active'));
+    
+    // Remove active class from all tab buttons
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    
+    // Show selected tab pane
+    document.getElementById(tabName + '-tab').classList.add('active');
+    
+    // Add active class to clicked button
+    event.target.classList.add('active');
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Information Market Platform{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/">Information Market</a>
+            </div>
+            <nav class="nav-menu">
+                <a href="/questions" class="nav-link">Questions</a>
+                <a href="/users" class="nav-link">Users</a>
+                {% if user %}
+                    <a href="/users/{{ user.id }}" class="nav-link">My Profile</a>
+                    <form method="post" action="/api/auth/jwt/logout" style="display: inline;">
+                        <button type="submit" class="nav-button">Logout</button>
+                    </form>
+                {% else %}
+                    <div class="auth-forms">
+                        <form method="post" action="/api/auth/jwt/login" class="login-form">
+                            <input type="email" name="username" placeholder="Email" required>
+                            <input type="password" name="password" placeholder="Password" required>
+                            <button type="submit">Login</button>
+                        </form>
+                        <a href="/register" class="nav-link">Register</a>
+                    </div>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Information Market Platform</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

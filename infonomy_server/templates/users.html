@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Information Market Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title">All Users</h1>
+    
+    {% if users %}
+        <div class="users-list">
+            {% for user in users %}
+                <div class="user-card">
+                    <div class="user-header">
+                        <h3><a href="/users/{{ user.id }}">{{ user.username }}</a></h3>
+                        <span class="user-meta">
+                            Member since: {{ user.created_at.strftime('%Y-%m-%d') }} | 
+                            Balance: ${{ "%.2f"|format(user.balance) }}
+                        </span>
+                    </div>
+                    
+                    <div class="user-stats">
+                        {% if user.buyer_profile %}
+                            <span class="stat">Buyer</span>
+                        {% endif %}
+                        {% if user.seller_profile %}
+                            <span class="stat">Seller</span>
+                        {% endif %}
+                        {% if user.bot_sellers %}
+                            <span class="stat">{{ user.bot_sellers|length }} Bot(s)</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="user-footer">
+                        <a href="/users/{{ user.id }}" class="btn btn-secondary">View Profile</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No users found.</p>
+    {% endif %}
+</div>
+{% endblock %} 

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Questions - Information Market Platform{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title">All Questions</h1>
+    
+    {% if questions %}
+        <div class="questions-list">
+            {% for question in questions %}
+                <div class="question-card">
+                    <div class="question-header">
+                        <h3><a href="/questions/{{ question.id }}">{{ question.query or "No title" }}</a></h3>
+                        <span class="question-meta">
+                            Budget: ${{ "%.2f"|format(question.max_budget) }} | 
+                            Priority: {{ question.priority }} | 
+                            {{ question.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        </span>
+                    </div>
+                    {% if question.context_pages %}
+                        <div class="context-pages">
+                            <strong>Context:</strong> {{ question.context_pages|join(', ') }}
+                        </div>
+                    {% endif %}
+                    <div class="question-footer">
+                        <a href="/questions/{{ question.id }}" class="btn btn-secondary">View Details</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No questions found.</p>
+    {% endif %}
+</div>
+{% endblock %} 

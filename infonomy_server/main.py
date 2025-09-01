@@ -4,9 +4,11 @@ from infonomy_server.database import create_db_and_tables, get_db
 from infonomy_server.models import User, InfoOffer, DecisionContext
 from infonomy_server.schemas import UserRead, UserCreate, UserUpdate, UserReadPrivate
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
-from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
+from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles, ui
 from infonomy_server.middleware import setup_logging_middleware
 from infonomy_server.logging_config import general_logger, log_business_event
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 # Import Celery app to ensure configuration is loaded
 import sys
@@ -14,10 +16,22 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from celery_app import celery
 
-app = FastAPI(title="Q&A Platform API", version="1.0.0")
+app = FastAPI(title="Information Market Platform", version="1.0.0")
+
+# Setup CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup logging middleware
 setup_logging_middleware(app)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="infonomy_server/static"), name="static")
 
 @app.on_event("startup")
 def on_startup():
@@ -27,20 +41,29 @@ def on_startup():
         "app_version": app.version
     })
 
-@app.get("/")
-def root():
-    return {"message": "Welcome to the Q&A Platform API"}
+# Root path is now handled by the UI router
+
+# Include UI routes first (these will be at root level)
+app.include_router(ui.router)
+
+# Include API routes with /api prefix
+app.include_router(decision_contexts.router, prefix="/api")
+app.include_router(info_offers.router, prefix="/api")
+app.include_router(inspection.router, prefix="/api")
+app.include_router(inbox.router, prefix="/api")
+app.include_router(bot_sellers.router, prefix="/api")
+app.include_router(profiles.router, prefix="/api")
 
 # User Endpoints - Define these BEFORE FastAPI Users routes to avoid conflicts
 # this is weird and I don't know why it's like this
 
-@app.get("/users/", response_model=list[UserRead], tags=["users"])
+@app.get("/api/users/", response_model=list[UserRead], tags=["users"])
 def get_users(db: Session = Depends(get_db)):
     db_users = db.exec(select(User)).all()
     return db_users
 
 
-@app.get("/users/{user_id}", response_model=UserRead, tags=["users"])
+@app.get("/api/users/{user_id}", response_model=UserRead, tags=["users"])
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -52,7 +75,7 @@ def get_user(
     return user
 
 
-@app.get("/users/me", response_model=UserReadPrivate, tags=["users"])
+@app.get("/api/users/me", response_model=UserReadPrivate, tags=["users"])
 def get_current_user(
     current_user: User = Depends(current_active_user),
 ):
@@ -60,7 +83,7 @@ def get_current_user(
     return current_user
 
 
-@app.put("/users/me", response_model=UserReadPrivate, tags=["users"])
+@app.put("/api/users/me", response_model=UserReadPrivate, tags=["users"])
 def update_current_user(
     user_updates: UserUpdate,
     db: Session = Depends(get_db),
@@ -75,28 +98,20 @@ def update_current_user(
     db.refresh(current_user)
     return current_user
 
-# Include our custom routes
-app.include_router(decision_contexts.router)
-app.include_router(info_offers.router)
-app.include_router(inspection.router)
-app.include_router(inbox.router)
-app.include_router(bot_sellers.router)
-app.include_router(profiles.router)
-
-# Include FastAPI Users routes
+# Include FastAPI Users routes with /api prefix
 app.include_router(
     fastapi_users.get_auth_router(auth_backend),
-    prefix="/auth/jwt",
+    prefix="/api/auth/jwt",
     tags=["auth"],
 )
 app.include_router(
     fastapi_users.get_register_router(UserRead, UserCreate),
-    prefix="/auth",
+    prefix="/api/auth",
     tags=["auth"],
 )
 app.include_router(
     fastapi_users.get_reset_password_router(),
-    prefix="/auth",
+    prefix="/api/auth",
     tags=["auth"],
 )
 app.include_router(
