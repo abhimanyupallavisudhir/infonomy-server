@@ -1,0 +1,1 @@
+2025-08-31T17:41:17.834573 | INFO     | inspection           | logging_config.py:248          | log_business_event        | {"event_type": "inspection_started", "user_id": 123, "context_id": 456, "offers_count": 5} | Business Event

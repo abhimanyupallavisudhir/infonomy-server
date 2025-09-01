@@ -1,0 +1,1 @@
+2025-08-31T17:41:17.833501 | INFO     | celery               | logging_config.py:237          | log_celery_task           | {"task_name": "test_task", "task_id": "task-123", "param1": "value1", "param2": 42} | Celery Task

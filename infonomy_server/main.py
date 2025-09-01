@@ -5,6 +5,8 @@ from infonomy_server.models import User, InfoOffer, DecisionContext
 from infonomy_server.schemas import UserRead, UserCreate, UserUpdate, UserReadPrivate
 from infonomy_server.auth import current_active_user, auth_backend, fastapi_users
 from infonomy_server.routers import decision_contexts, info_offers, inspection, inbox, bot_sellers, profiles
+from infonomy_server.middleware import setup_logging_middleware
+from infonomy_server.logging_config import general_logger, log_business_event
 
 # Import Celery app to ensure configuration is loaded
 import sys
@@ -14,9 +16,16 @@ from celery_app import celery
 
 app = FastAPI(title="Q&A Platform API", version="1.0.0")
 
+# Setup logging middleware
+setup_logging_middleware(app)
+
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    log_business_event(general_logger, "application_startup", parameters={
+        "app_title": app.title,
+        "app_version": app.version
+    })
 
 @app.get("/")
 def root():

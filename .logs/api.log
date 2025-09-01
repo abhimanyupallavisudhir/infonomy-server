@@ -1,0 +1,2 @@
+2025-08-31T17:41:17.831933 | INFO     | api                  | logging_config.py:189          | log_api_request           | {"method": "GET", "path": "/api/test", "user_id": 123, "query_params": {"page": "1"}, "headers": {"User-Agent": "test-agent"}} | API Request
+2025-08-31T17:41:17.832657 | INFO     | api                  | logging_config.py:201          | log_api_response          | {"method": "GET", "path": "/api/test", "status_code": 200, "response_time_ms": 150.0, "user_id": 123} | API Response

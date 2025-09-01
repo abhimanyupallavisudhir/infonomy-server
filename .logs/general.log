@@ -1,0 +1,14 @@
+2025-08-31T17:40:15.495385 | INFO     | general              | logging_config.py:0            | module_init               | {"logs_directory": ".logs", "max_log_size_mb": 10, "backup_count": 5} | Logging system initialized
+2025-08-31T17:40:19.482420 | INFO     | general              | logging_config.py:248          | log_business_event        | {"event_type": "application_startup", "user_id": null, "app_title": "Q&A Platform API", "app_version": "1.0.0"} | Business Event
+2025-08-31T17:41:17.830670 | INFO     | general              | logging_config.py:0            | module_init               | {"logs_directory": ".logs", "max_log_size_mb": 10, "backup_count": 5} | Logging system initialized
+2025-08-31T17:41:17.831162 | INFO     | general              | unknown                        | unknown                   | {} | General log test message
+2025-08-31T17:41:17.831493 | INFO     | general              | logging_config.py:248          | log_business_event        | {"event_type": "test_event", "user_id": 123, "test_param": "test_value", "number": 42} | Business Event
+2025-08-31T17:41:17.836345 | ERROR    | general              | logging_config.py:171          | log_function_error        | {"arg1": "value1"} | Function error: test_function
+Traceback (most recent call last):
+  File "/home/manyu/gdrive/Gittable/code/infonomy/test_logging.py", line 78, in test_logging_system
+    raise ValueError("Test error for logging")
+ValueError: Test error for logging
+2025-08-31T17:42:13.768717 | INFO     | general              | logging_config.py:0            | module_init               | {"logs_directory": ".logs", "max_log_size_mb": 10, "backup_count": 5} | Logging system initialized
+2025-08-31T17:42:21.959232 | INFO     | general              | logging_config.py:248          | log_business_event        | {"event_type": "application_startup", "user_id": null, "app_title": "Q&A Platform API", "app_version": "1.0.0"} | Business Event
+2025-08-31T17:42:30.945365 | INFO     | general              | logging_config.py:0            | module_init               | {"logs_directory": ".logs", "max_log_size_mb": 10, "backup_count": 5} | Logging system initialized
+2025-08-31T17:42:34.652057 | INFO     | general              | logging_config.py:248          | log_business_event        | {"event_type": "application_startup", "user_id": null, "app_title": "Q&A Platform API", "app_version": "1.0.0"} | Business Event

@@ -23,6 +23,11 @@ from infonomy_server.models import (
     User,
     LLMBuyerType,
 )
+from infonomy_server.logging_config import (
+    celery_logger, bot_sellers_logger, inspection_logger, 
+    log_celery_task, log_business_event, log_function_call, 
+    log_function_return, log_function_error, logged_function
+)
 
 
 @celery.task
@@ -32,12 +37,21 @@ def process_bot_sellers_for_context(context_id: int):
     This task is called when a DecisionContext is submitted to seller inboxes.
     """
     
+    # Log task start
+    task_id = process_bot_sellers_for_context.request.id if hasattr(process_bot_sellers_for_context.request, 'id') else 'unknown'
+    log_celery_task(celery_logger, "process_bot_sellers_for_context", task_id, {
+        "context_id": context_id
+    })
+    
     session = Session(engine)
     
     try:
         # Get the decision context
         context = session.get(DecisionContext, context_id)
         if not context:
+            log_business_event(celery_logger, "context_not_found", parameters={
+                "context_id": context_id
+            })
             return
         
         # Find all BotSeller matchers that match this context
@@ -64,17 +78,34 @@ def process_bot_sellers_for_context(context_id: int):
                 if info_offer:
                     session.add(info_offer)
                     processed_count += 1
+                    
+                    log_business_event(bot_sellers_logger, "bot_seller_offer_created", parameters={
+                        "bot_seller_id": bot_seller.id,
+                        "context_id": context_id,
+                        "info_offer_id": info_offer.id,
+                        "matcher_id": matcher.id
+                    })
             except Exception as e:
                 # Log error but continue processing other bots
-                print(f"Error processing BotSeller matcher {matcher.id}: {str(e)}")
+                log_function_error(bot_sellers_logger, "process_bot_seller_matcher", e, {
+                    "matcher_id": matcher.id,
+                    "context_id": context_id
+                })
                 continue
         
         if processed_count > 0:
             session.commit()
-            print(f"Processed {processed_count} BotSellers for context {context_id}")
+            log_business_event(celery_logger, "bot_sellers_processing_complete", parameters={
+                "context_id": context_id,
+                "processed_count": processed_count,
+                "total_matchers": len(bot_matchers)
+            })
         
     except Exception as e:
         session.rollback()
+        log_function_error(celery_logger, "process_bot_sellers_for_context", e, {
+            "context_id": context_id
+        })
         raise e
     finally:
         session.close()
@@ -215,6 +246,7 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
         from infonomy_server.llm import CLIENT
         
         with temporary_api_keys(api_keys):
+            start_time = time.time()
             response = CLIENT.chat.completions.create(
                 model=bot_seller.llm_model,
                 response_model=BotSellerResponse,
@@ -222,6 +254,16 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
                 max_tokens=DEFAULT_LLM_MAX_TOKENS,
                 temperature=DEFAULT_LLM_TEMPERATURE
             )
+            end_time = time.time()
+            
+            # Log LLM call
+            from infonomy_server.logging_config import log_llm_call
+            log_llm_call(bot_sellers_logger, bot_seller.llm_model, len(prompt), 
+                        len(str(response)), end_time - start_time, {
+                            "bot_seller_id": bot_seller.id,
+                            "context_id": context.id,
+                            "user_id": bot_seller.user_id
+                        })
         
         return response.private_info, response.public_info, response.price
         
@@ -253,6 +295,18 @@ def inspect_task(
     """
     if purchased is None:
         purchased = []
+    
+    # Log task start
+    task_id = self.request.id if hasattr(self.request, 'id') else 'unknown'
+    log_celery_task(celery_logger, "inspect_task", task_id, {
+        "context_id": context_id,
+        "buyer_id": buyer_id,
+        "depth": depth,
+        "breadth": breadth,
+        "max_depth": max_depth,
+        "max_breadth": max_breadth,
+        "purchased_count": len(purchased)
+    })
     
     session = Session(engine)
     

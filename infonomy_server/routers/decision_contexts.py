@@ -18,6 +18,7 @@ from infonomy_server.utils import (
     recompute_inbox_for_context,
     increment_buyer_query_counter
 )
+from infonomy_server.logging_config import api_logger, log_business_event
 from typing import List, Optional
 
 router = APIRouter(tags=["decision_contexts"])
@@ -32,7 +33,18 @@ def create_decision_context(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user),
 ):
+    # Log business event
+    log_business_event(api_logger, "decision_context_creation_started", user_id=current_user.id, parameters={
+        "query": decision_context.query,
+        "max_budget": decision_context.max_budget,
+        "priority": decision_context.priority,
+        "available_balance": current_user.available_balance
+    })
+    
     if current_user.buyer_profile is None:
+        log_business_event(api_logger, "decision_context_creation_failed", user_id=current_user.id, parameters={
+            "error": "no_buyer_profile"
+        })
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User does not have a buyer profile",
@@ -40,6 +52,11 @@ def create_decision_context(
     
     # Validate max_budget against available_balance
     if decision_context.max_budget > current_user.available_balance:
+        log_business_event(api_logger, "decision_context_creation_failed", user_id=current_user.id, parameters={
+            "error": "insufficient_balance",
+            "max_budget": decision_context.max_budget,
+            "available_balance": current_user.available_balance
+        })
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Max budget ({decision_context.max_budget}) exceeds available balance ({current_user.available_balance})",
@@ -57,6 +74,15 @@ def create_decision_context(
     db.add(ctx)
     db.commit()
     db.refresh(ctx)
+    
+    # Log successful creation
+    log_business_event(api_logger, "decision_context_created", user_id=current_user.id, parameters={
+        "context_id": ctx.id,
+        "query": ctx.query,
+        "max_budget": ctx.max_budget,
+        "priority": ctx.priority,
+        "remaining_balance": current_user.available_balance
+    })
 
     # Increment the buyer's query counter for this priority level
     increment_buyer_query_counter(current_user.buyer_profile, ctx.priority, db)

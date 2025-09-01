@@ -17,6 +17,7 @@ from sqlmodel import Session
 
 from infonomy_server.database import get_db
 from infonomy_server.models import User
+from infonomy_server.logging_config import auth_logger, log_business_event
 
 # Load environment variables from .env file
 load_dotenv()
@@ -27,17 +28,27 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
     verification_token_secret = SECRET
 
     async def on_after_register(self, user: User, request: Optional[Request] = None):
-        print(f"User {user.id} has registered.")
+        log_business_event(auth_logger, "user_registered", user_id=user.id, parameters={
+            "email": user.email,
+            "is_active": user.is_active,
+            "is_superuser": user.is_superuser
+        })
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Optional[Request] = None
     ):
-        print(f"User {user.id} has forgot their password. Reset token: {token}")
+        log_business_event(auth_logger, "password_reset_requested", user_id=user.id, parameters={
+            "email": user.email,
+            "token_length": len(token)
+        })
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Optional[Request] = None
     ):
-        print(f"Verification requested for user {user.id}. Verification token: {token}")
+        log_business_event(auth_logger, "verification_requested", user_id=user.id, parameters={
+            "email": user.email,
+            "token_length": len(token)
+        })
 
     async def on_after_login(
         self, user: User, request: Optional[Request] = None, response=None
@@ -55,11 +66,18 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
             if db_user:
                 bonus_result = process_daily_login_bonus(db_user, session)
                 if bonus_result["bonus_awarded"]:
-                    print(f"User {user.id} received daily bonus: {bonus_result['bonus_amount']}")
+                    log_business_event(auth_logger, "daily_bonus_awarded", user_id=user.id, parameters={
+                        "bonus_amount": bonus_result['bonus_amount'],
+                        "new_balance": db_user.available_balance
+                    })
                 else:
-                    print(f"User {user.id} already received daily bonus today")
+                    log_business_event(auth_logger, "daily_bonus_already_received", user_id=user.id, parameters={
+                        "last_bonus_date": bonus_result.get('last_bonus_date')
+                    })
         except Exception as e:
-            print(f"Error processing daily bonus for user {user.id}: {str(e)}")
+            log_business_event(auth_logger, "daily_bonus_error", user_id=user.id, parameters={
+                "error": str(e)
+            })
         finally:
             session.close()
 

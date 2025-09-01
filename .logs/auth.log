@@ -1,0 +1,1 @@
+2025-08-31T17:41:17.833887 | INFO     | auth                 | logging_config.py:248          | log_business_event        | {"event_type": "user_login", "user_id": 123, "email": "test@example.com", "ip_address": "192.168.1.1"} | Business Event

@@ -3,6 +3,7 @@ import instructor
 from litellm import completion
 from pydantic import BaseModel, model_validator
 from infonomy_server.models import DecisionContext, InfoOffer, LLMBuyerType, User
+from infonomy_server.logging_config import llm_logger, log_llm_call, log_function_call, log_function_return, log_function_error
 
 CLIENT = instructor.from_litellm(completion)
 
@@ -129,6 +130,17 @@ def call_llm(
     buyer: LLMBuyerType,
     user: Optional["User"] = None,
 ) -> Tuple[List[int], Optional["DecisionContext"]]:
+    # Log function entry
+    log_function_call(llm_logger, "call_llm", {
+        "context_id": context.id,
+        "offers_count": len(offers),
+        "known_info_count": len(known_info),
+        "buyer_id": buyer.id,
+        "user_id": user.id if user else None,
+        "max_budget": context.max_budget,
+        "used_budget": sum(io.price for io in known_info)
+    })
+    
     prompt = buyer.custom_prompt or INSTRUCTIONS
     used_budget = sum(io.price for io in known_info)
     messages = [
@@ -153,11 +165,23 @@ def call_llm(
 
     while not accept:
         with temporary_api_keys(api_keys):
+            import time
+            start_time = time.time()
             response = CLIENT.chat.completions.create(
                 model=buyer.model,
                 response_model=LLMResponse,
                 messages=messages,
             )
+            end_time = time.time()
+            
+            # Log LLM call
+            log_llm_call(llm_logger, buyer.model, len(str(messages)), 
+                        len(str(response)), end_time - start_time, {
+                            "context_id": context.id,
+                            "buyer_id": buyer.id,
+                            "user_id": user.id if user else None,
+                            "iteration": "retry" if len(messages) > 1 else "initial"
+                        })
         if response.chosen_offer_ids:
             # check that chosen IDs are a subset of available offers
             chosen_ids = set(response.chosen_offer_ids)
@@ -182,7 +206,13 @@ def call_llm(
                 )
                 continue
             accept = True
-            return response.chosen_offer_ids, None
+            result = (response.chosen_offer_ids, None)
+            log_function_return(llm_logger, "call_llm", {
+                "result_type": "chosen_offers",
+                "chosen_offer_ids": response.chosen_offer_ids,
+                "total_cost": sum(io.price for io in offers if io.id in response.chosen_offer_ids)
+            })
+            return result
         elif response.followup_query:
             # check followup_query_budget
             if (
@@ -221,4 +251,11 @@ def call_llm(
                 bot_seller_ids=bot_seller_ids,
                 priority=1,  # intentionally submitted so high priority
             )
-            return None, child_ctx
+            result = (None, child_ctx)
+            log_function_return(llm_logger, "call_llm", {
+                "result_type": "followup_query",
+                "followup_query": response.followup_query,
+                "followup_budget": response.followup_query_budget,
+                "child_context_id": child_ctx.id if hasattr(child_ctx, 'id') else "new"
+            })
+            return result
