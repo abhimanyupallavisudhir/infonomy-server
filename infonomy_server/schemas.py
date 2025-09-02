@@ -32,7 +32,6 @@ class UserUpdate(schemas.BaseUserUpdate):
 class HumanBuyerRead(SQLModel):
     id: int
     default_child_llm: LLMBuyerType
-    default_max_budget: float
     num_queries: dict[int, int]
     num_inspected: dict[int, int]
     num_purchased: dict[int, int]
@@ -44,11 +43,9 @@ class HumanBuyerRead(SQLModel):
 
 class HumanBuyerCreate(SQLModel):
     default_child_llm:  LLMBuyerType = LLMBuyerType()
-    default_max_budget: float = 0.0
 
 class HumanBuyerUpdate(SQLModel):
     default_child_llm:    Optional[LLMBuyerType] = None
-    default_max_budget:   Optional[float]         = None
 
 class SellerMatcherRead(SQLModel):
     id:                 int

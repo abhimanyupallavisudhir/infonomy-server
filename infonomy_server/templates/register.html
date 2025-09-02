@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Register - Information Market Platform{% endblock %}
+{% block title %}Register - Infonomy{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -27,7 +27,7 @@
         </form>
         
         <div class="auth-links">
-            <p>Already have an account? <a href="/login">Login here</a></p>
+    
         </div>
     </div>
 </div>
@@ -55,8 +55,8 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         });
         
         if (response.ok) {
-            // Registration successful, redirect to login
-            window.location.href = '/login';
+            // Registration successful, redirect to home
+            window.location.href = '/';
         } else {
             const errorData = await response.json();
             alert('Registration failed: ' + (errorData.detail || 'Unknown error'));

@@ -16,7 +16,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from celery_app import celery
 
-app = FastAPI(title="Information Market Platform", version="1.0.0")
+app = FastAPI(title="Infonomy", version="1.0.0")
 
 # Setup CORS
 app.add_middleware(

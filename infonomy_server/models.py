@@ -96,7 +96,7 @@ class HumanBuyer(SQLModel, table=True):
     default_child_llm: LLMBuyerType = Field(
         default_factory=LLMBuyerType, sa_column=Column(JSON, nullable=False)
     )
-    default_max_budget: float = Field(default=50.0)
+
     # autoinspect: bool = Field(default=True)
     # autoinspect_n: int = Field(default=3)
 

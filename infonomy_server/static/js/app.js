@@ -1,7 +1,7 @@
 // Main application JavaScript file
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize any global functionality
-    console.log('Information Market Platform loaded');
+    console.log('Infonomy loaded');
     
     // Add form validation and enhancement
     enhanceForms();

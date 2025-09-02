@@ -32,6 +32,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 
 # API Configuration
 API_V1_STR = "/api/v1"
-PROJECT_NAME = "Infonomy Information Market API"
+PROJECT_NAME = "Infonomy API"
 VERSION = "1.0.0"
 DESCRIPTION = "An information market platform supporting human and bot sellers" 

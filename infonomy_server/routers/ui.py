@@ -146,6 +146,19 @@ async def users_page(request: Request, db: Session = Depends(get_db)):
     context["users"] = users
     return templates.TemplateResponse("users.html", context)
 
+@router.get("/profile", response_class=HTMLResponse)
+async def profile_setup_page(
+    request: Request, 
+    db: Session = Depends(get_db)
+):
+    """Profile setup page for new users"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    return templates.TemplateResponse("profile.html", context)
+
 @router.get("/users/me", response_class=HTMLResponse)
 async def current_user_profile_page(
     request: Request, 
@@ -227,11 +240,7 @@ async def register_page(request: Request):
     context = await get_user_context(request, None)
     return templates.TemplateResponse("register.html", context)
 
-@router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    """User login page"""
-    context = await get_user_context(request, None)
-    return templates.TemplateResponse("login.html", context)
+
 
 # Form handlers
 @router.post("/questions", response_class=HTMLResponse)
@@ -360,7 +369,6 @@ async def inspect_answer(
 async def create_buyer_profile(
     request: Request,
     default_child_llm: str = Form(...),
-    default_max_budget: float = Form(...),
     db: Session = Depends(get_db)
 ):
     """Create or update buyer profile"""
@@ -378,20 +386,17 @@ async def create_buyer_profile(
     llm_buyer_dict = llm_buyer.dict()
     
     buyer_data = HumanBuyerCreate(
-        default_child_llm=llm_buyer_dict,
-        default_max_budget=default_max_budget
+        default_child_llm=llm_buyer_dict
     )
     
     if current_user.buyer_profile:
         # Update existing profile
         current_user.buyer_profile.default_child_llm = llm_buyer_dict
-        current_user.buyer_profile.default_max_budget = default_max_budget
         db.add(current_user.buyer_profile)
     else:
         # Create new profile
         buyer = HumanBuyer(
             default_child_llm=llm_buyer_dict,
-            default_max_budget=default_max_budget,
             user_id=current_user.id
         )
         db.add(buyer)
@@ -401,6 +406,31 @@ async def create_buyer_profile(
     db.refresh(current_user)
     
     return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+@router.post("/profile/seller", response_class=HTMLResponse)
+async def create_seller_profile(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Create seller profile"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
+    # Check if user already has a seller profile
+    if current_user.seller_profile:
+        raise HTTPException(status_code=400, detail="User already has a seller profile")
+    
+    # Create the seller profile
+    seller = HumanSeller(id=current_user.id)
+    db.add(seller)
+    db.commit()
+    db.refresh(seller)
+    
+    return RedirectResponse(url="/profile", status_code=status.HTTP_303_SEE_OTHER)
 
 @router.post("/profile/bot-seller", response_class=HTMLResponse)
 async def create_bot_seller(

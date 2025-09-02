@@ -36,7 +36,7 @@ def create_human_buyer(
 ):
     # Log buyer profile creation
     log_business_event(api_logger, "buyer_profile_created", user_id=current_user.id, parameters={
-        "default_max_budget": human_buyer.default_max_budget,
+
         "has_default_child_llm": bool(human_buyer.default_child_llm)
     })
     

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Information Market Platform{% endblock %}</title>
+    <title>{% block title %}Infonomy{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <header class="navbar">
         <div class="nav-container">
             <div class="nav-brand">
-                <a href="/">Information Market</a>
+                <a href="/">Infonomy</a>
             </div>
             <nav class="nav-menu">
                 <a href="/questions" class="nav-link">Questions</a>
@@ -28,7 +28,7 @@
 
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2024 Information Market Platform</p>
+            <p>&copy; 2024 Infonomy</p>
         </div>
     </footer>
 
@@ -42,11 +42,26 @@
             console.log('updateAuthSection called, token:', token ? token.substring(0, 20) + '...' : 'None');
             
             if (token) {
-                // User is logged in
-                authSection.innerHTML = `
-                    <a href="/users/me" class="nav-link">My Profile</a>
-                    <button onclick="logout()" class="nav-button">Logout</button>
-                `;
+                // User is logged in - we'll need to fetch the username
+                fetch('/api/users/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => response.json())
+                .then(user => {
+                    authSection.innerHTML = `
+                        <a href="/users/me" class="nav-link">${user.username}</a>
+                        <button onclick="logout()" class="nav-button">Logout</button>
+                    `;
+                })
+                .catch(error => {
+                    // Fallback if we can't get username
+                    authSection.innerHTML = `
+                        <a href="/users/me" class="nav-link">Profile</a>
+                        <button onclick="logout()" class="nav-button">Logout</button>
+                    `;
+                });
             } else {
                 // User is not logged in
                 authSection.innerHTML = `

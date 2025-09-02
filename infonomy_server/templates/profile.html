@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Profile Setup - Infonomy{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="profile-setup">
+        <h1 class="profile-title">Complete Your Profile</h1>
+        <p class="profile-subtitle">You need both a buyer and seller profile to use Infonomy</p>
+        
+        <!-- Buyer Profile Section -->
+        <div class="profile-section">
+            <h2>Buyer Profile</h2>
+            {% if user.buyer_profile %}
+                <div class="current-profile">
+                    <p><strong>✓ Buyer Profile Created</strong></p>
+                    <p><strong>Default Child LLM:</strong> {{ user.buyer_profile.default_child_llm.name }}</p>
+                </div>
+            {% else %}
+                <p>Create a buyer profile to ask questions and purchase information.</p>
+                <form method="post" action="/profile/buyer" class="profile-form">
+                    <div class="form-group">
+                        <label for="default_child_llm">Default Child LLM:</label>
+                        <select name="default_child_llm" id="default_child_llm" required>
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            <option value="claude-3">Claude 3</option>
+                            <option value="claude-2">Claude 2</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Create Buyer Profile</button>
+                </form>
+            {% endif %}
+        </div>
+        
+        <!-- Seller Profile Section -->
+        <div class="profile-section">
+            <h2>Seller Profile</h2>
+            {% if user.seller_profile %}
+                <div class="current-profile">
+                    <p><strong>✓ Seller Profile Created</strong></p>
+                    <p><strong>Matchers:</strong> {{ user.seller_profile.matchers|length }}</p>
+                </div>
+            {% else %}
+                <p>Create a seller profile to provide answers and earn money.</p>
+                <form method="post" action="/profile/seller" class="profile-form">
+                    <button type="submit" class="btn btn-primary">Create Seller Profile</button>
+                </form>
+            {% endif %}
+        </div>
+        
+        <!-- Continue Button -->
+        {% if user.buyer_profile and user.seller_profile %}
+            <div class="continue-section">
+                <p class="success-message">✓ Your profile is complete!</p>
+                <a href="/" class="btn btn-success">Continue to Infonomy</a>
+            </div>
+        {% else %}
+            <div class="continue-section">
+                <p class="info-message">Complete both profiles to continue</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.profile-setup {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.profile-title {
+    text-align: center;
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+.profile-subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.profile-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.profile-section h2 {
+    color: #333;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 0.5rem;
+}
+
+.current-profile {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 4px;
+    padding: 1rem;
+    color: #155724;
+}
+
+.profile-form {
+    margin-top: 1rem;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.form-group select,
+.form-group input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #1e7e34;
+}
+
+.continue-section {
+    text-align: center;
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+}
+
+.success-message {
+    color: #28a745;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.info-message {
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+{% endblock %} 

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Home - Information Market Platform{% endblock %}
+{% block title %}Home - Infonomy{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h1 class="page-title">Information Market Platform</h1>
+            <h1 class="page-title">Welcome to Infonomy</h1>
     
     <div id="auth-content">
         <!-- This will be populated by JavaScript based on auth status -->
@@ -86,7 +86,7 @@ function updateAuthContent() {
         // User is not logged in
         authContent.innerHTML = `
             <div class="welcome-message">
-                <p>Welcome to the Information Market Platform! Please <a href="/login">login</a> or <a href="/register">register</a> to start asking questions and providing answers.</p>
+                <p>Welcome to Infonomy! Please login or register to start asking questions and providing answers.</p>
             </div>
         `;
     }
