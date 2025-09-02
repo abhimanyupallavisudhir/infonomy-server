@@ -525,6 +525,11 @@ async def create_matcher(
     )
     db.add(matcher)
     db.commit()
+    db.refresh(matcher)
+    
+    # Recompute inbox for this new matcher
+    from infonomy_server.utils import recompute_inbox_for_matcher
+    recompute_inbox_for_matcher(matcher, db)
     
     return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER) 
 
@@ -562,6 +567,93 @@ async def create_bot_matcher(
         bot_seller_id=bot_seller_id
     )
     db.add(matcher)
+    db.commit()
+    
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/profile/matcher/{matcher_id}/update", response_class=HTMLResponse)
+async def update_matcher(
+    matcher_id: int,
+    request: Request,
+    keywords: str = Form(""),
+    context_pages: str = Form(""),
+    min_max_budget: float = Form(0.0),
+    min_inspection_rate: float = Form(0.0),
+    min_purchase_rate: float = Form(0.0),
+    min_priority: int = Form(0),
+    buyer_type: str = Form(""),
+    buyer_llm_model: str = Form(""),
+    buyer_system_prompt: str = Form(""),
+    age_limit: int = Form(0),
+    db: Session = Depends(get_db)
+):
+    """Update an existing matcher"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
+    # Get the matcher and verify ownership
+    matcher = db.get(SellerMatcher, matcher_id)
+    if not matcher or matcher.human_seller_id != current_user.seller_profile.id:
+        raise HTTPException(status_code=404, detail="Matcher not found")
+    
+    # Parse comma-separated strings
+    keywords_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
+    context_pages_list = [p.strip() for p in context_pages.split(",") if p.strip()] if context_pages else None
+    buyer_llm_model_list = [m.strip() for m in buyer_llm_model.split(",") if m.strip()] if buyer_llm_model else None
+    buyer_system_prompt_list = [p.strip() for p in buyer_system_prompt.split(",") if p.strip()] if buyer_system_prompt else None
+    
+    # Update matcher fields
+    matcher.keywords = keywords_list
+    matcher.context_pages = context_pages_list
+    matcher.min_max_budget = min_max_budget
+    matcher.min_inspection_rate = min_inspection_rate
+    matcher.min_purchase_rate = min_purchase_rate
+    matcher.min_priority = min_priority
+    matcher.buyer_type = buyer_type if buyer_type else None
+    matcher.buyer_llm_model = buyer_llm_model_list
+    matcher.buyer_system_prompt = buyer_system_prompt_list
+    matcher.age_limit = age_limit if age_limit > 0 else None
+    
+    db.add(matcher)
+    db.commit()
+    db.refresh(matcher)
+    
+    # Recompute inbox for this updated matcher
+    from infonomy_server.utils import recompute_inbox_for_matcher
+    recompute_inbox_for_matcher(matcher, db)
+    
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/profile/matcher/{matcher_id}/delete", response_class=HTMLResponse)
+async def delete_matcher(
+    matcher_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Delete a matcher"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
+    # Get the matcher and verify ownership
+    matcher = db.get(SellerMatcher, matcher_id)
+    if not matcher or matcher.human_seller_id != current_user.seller_profile.id:
+        raise HTTPException(status_code=404, detail="Matcher not found")
+    
+    # Remove all inbox items for this matcher before deleting it
+    from infonomy_server.utils import remove_matcher_from_inboxes
+    remove_matcher_from_inboxes(matcher_id, db)
+    
+    db.delete(matcher)
     db.commit()
     
     return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)

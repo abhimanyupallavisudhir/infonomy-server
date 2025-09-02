@@ -113,11 +113,87 @@
                     {% if profile_user.seller_profile %}
                         <div class="matchers-list">
                             {% for matcher in profile_user.seller_profile.matchers %}
-                                <div class="matcher-item">
-                                    <strong>Keywords:</strong> {{ matcher.keywords|join(', ') if matcher.keywords else 'None' }}<br>
-                                    <strong>Min Budget:</strong> ${{ "%.2f"|format(matcher.min_max_budget) }}<br>
-                                    <strong>Min Priority:</strong> {{ matcher.min_priority }}
-                                    <button onclick="deleteMatcher({{ matcher.id }})" class="btn btn-danger btn-sm">Delete</button>
+                                <div class="matcher-item" id="matcher-{{ matcher.id }}">
+                                    <div class="matcher-display" id="matcher-display-{{ matcher.id }}">
+                                        <strong>Keywords:</strong> {{ matcher.keywords|join(', ') if matcher.keywords else 'None' }}<br>
+                                        <strong>Context Pages:</strong> {{ matcher.context_pages|join(', ') if matcher.context_pages else 'None' }}<br>
+                                        <strong>Min Budget:</strong> ${{ "%.2f"|format(matcher.min_max_budget) }}<br>
+                                        <strong>Min Priority:</strong> {{ matcher.min_priority }}<br>
+                                        <strong>Min Inspection Rate:</strong> {{ matcher.min_inspection_rate }}<br>
+                                        <strong>Min Purchase Rate:</strong> {{ matcher.min_purchase_rate }}<br>
+                                        <strong>Buyer Type:</strong> {{ matcher.buyer_type or 'Any' }}<br>
+                                        <strong>Age Limit:</strong> {{ matcher.age_limit or 'None' }}
+                                        <div class="matcher-actions">
+                                            <button onclick="editMatcher({{ matcher.id }})" class="btn btn-primary btn-sm">Edit</button>
+                                            <button onclick="deleteMatcher({{ matcher.id }})" class="btn btn-danger btn-sm">Delete</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="matcher-edit hidden" id="matcher-edit-{{ matcher.id }}">
+                                        <form method="post" action="/profile/matcher/{{ matcher.id }}/update" class="profile-form">
+                                            <div class="form-group">
+                                                <label for="keywords-{{ matcher.id }}">Keywords (comma-separated):</label>
+                                                <input type="text" name="keywords" id="keywords-{{ matcher.id }}" value="{{ matcher.keywords|join(', ') if matcher.keywords else '' }}" placeholder="keyword1, keyword2">
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="context_pages-{{ matcher.id }}">Context Pages (comma-separated):</label>
+                                                <input type="text" name="context_pages" id="context_pages-{{ matcher.id }}" value="{{ matcher.context_pages|join(', ') if matcher.context_pages else '' }}" placeholder="page1, page2">
+                                            </div>
+                                            
+                                            <div class="form-row">
+                                                <div class="form-group">
+                                                    <label for="min_max_budget-{{ matcher.id }}">Min Max Budget:</label>
+                                                    <input type="number" name="min_max_budget" id="min_max_budget-{{ matcher.id }}" step="0.01" min="0" value="{{ matcher.min_max_budget }}">
+                                                </div>
+                                                
+                                                <div class="form-group">
+                                                    <label for="min_priority-{{ matcher.id }}">Min Priority:</label>
+                                                    <select name="min_priority" id="min_priority-{{ matcher.id }}">
+                                                        <option value="0" {% if matcher.min_priority == 0 %}selected{% endif %}>Low (0)</option>
+                                                        <option value="1" {% if matcher.min_priority == 1 %}selected{% endif %}>High (1)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="form-row">
+                                                <div class="form-group">
+                                                    <label for="min_inspection_rate-{{ matcher.id }}">Min Inspection Rate:</label>
+                                                    <input type="number" name="min_inspection_rate" id="min_inspection_rate-{{ matcher.id }}" step="0.01" min="0" max="1" value="{{ matcher.min_inspection_rate }}">
+                                                </div>
+                                                
+                                                <div class="form-group">
+                                                    <label for="min_purchase_rate-{{ matcher.id }}">Min Purchase Rate:</label>
+                                                    <input type="number" name="min_purchase_rate" id="min_purchase_rate-{{ matcher.id }}" step="0.01" min="0" max="1" value="{{ matcher.min_purchase_rate }}">
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="buyer_type-{{ matcher.id }}">Buyer Type:</label>
+                                                <input type="text" name="buyer_type" id="buyer_type-{{ matcher.id }}" value="{{ matcher.buyer_type or '' }}" placeholder="human, llm, or leave empty for any">
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="buyer_llm_model-{{ matcher.id }}">Buyer LLM Models (comma-separated):</label>
+                                                <input type="text" name="buyer_llm_model" id="buyer_llm_model-{{ matcher.id }}" value="{{ matcher.buyer_llm_model|join(', ') if matcher.buyer_llm_model else '' }}" placeholder="gpt-4, claude-3">
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="buyer_system_prompt-{{ matcher.id }}">Buyer System Prompts (comma-separated):</label>
+                                                <input type="text" name="buyer_system_prompt" id="buyer_system_prompt-{{ matcher.id }}" value="{{ matcher.buyer_system_prompt|join(', ') if matcher.buyer_system_prompt else '' }}" placeholder="prompt1, prompt2">
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="age_limit-{{ matcher.id }}">Age Limit (days):</label>
+                                                <input type="number" name="age_limit" id="age_limit-{{ matcher.id }}" min="0" value="{{ matcher.age_limit or 0 }}">
+                                            </div>
+                                            
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-primary">Update Matcher</button>
+                                                <button type="button" onclick="cancelEditMatcher({{ matcher.id }})" class="btn btn-secondary">Cancel</button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
                             {% endfor %}
                         </div>
@@ -568,6 +644,44 @@
     .api-keys-actions .btn {
         padding: 0.5rem 1rem;
     }
+    
+    /* Matcher Styling */
+    .matcher-item {
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: #f8f9fa;
+    }
+    
+    .matcher-actions {
+        margin-top: 0.5rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .matcher-edit {
+        background: white;
+        border: 1px solid #007bff;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .form-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .form-row {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .form-row .form-group {
+        flex: 1;
+    }
 </style>
 
 <script>
@@ -605,10 +719,37 @@ function updateInboxStatus(inboxId, status) {
     });
 }
 
+function editMatcher(matcherId) {
+    // Hide display and show edit form
+    document.getElementById(`matcher-display-${matcherId}`).classList.add('hidden');
+    document.getElementById(`matcher-edit-${matcherId}`).classList.remove('hidden');
+}
+
+function cancelEditMatcher(matcherId) {
+    // Hide edit form and show display
+    document.getElementById(`matcher-edit-${matcherId}`).classList.add('hidden');
+    document.getElementById(`matcher-display-${matcherId}`).classList.remove('hidden');
+}
+
 function deleteMatcher(matcherId) {
-    if (confirm('Are you sure you want to delete this matcher?')) {
-        // TODO: Implement matcher deletion
-        alert('Matcher deletion not yet implemented');
+    if (confirm('Are you sure you want to delete this matcher? This will also remove all associated inbox items.')) {
+        // Create a form and submit it to delete the matcher
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/profile/matcher/${matcherId}/delete`;
+        
+        // Add CSRF token if needed (using the same approach as other forms)
+        const authToken = getCookie('auth_token');
+        if (authToken) {
+            const tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = 'auth_token';
+            tokenInput.value = authToken;
+            form.appendChild(tokenInput);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 
