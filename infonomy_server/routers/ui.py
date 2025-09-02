@@ -361,29 +361,36 @@ async def create_buyer_profile(
     request: Request,
     default_child_llm: str = Form(...),
     default_max_budget: float = Form(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Create or update buyer profile"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
     from infonomy_server.models import LLMBuyerType
     
-    # Create LLMBuyerType instance
+    # Create LLMBuyerType instance and convert to dict for JSON storage
     llm_buyer = LLMBuyerType(name=default_child_llm)
+    llm_buyer_dict = llm_buyer.dict()
     
     buyer_data = HumanBuyerCreate(
-        default_child_llm=llm_buyer,
+        default_child_llm=llm_buyer_dict,
         default_max_budget=default_max_budget
     )
     
     if current_user.buyer_profile:
         # Update existing profile
-        current_user.buyer_profile.default_child_llm = llm_buyer
+        current_user.buyer_profile.default_child_llm = llm_buyer_dict
         current_user.buyer_profile.default_max_budget = default_max_budget
         db.add(current_user.buyer_profile)
     else:
         # Create new profile
         buyer = HumanBuyer(
-            default_child_llm=llm_buyer,
+            default_child_llm=llm_buyer_dict,
             default_max_budget=default_max_budget,
             user_id=current_user.id
         )
@@ -402,10 +409,16 @@ async def create_bot_seller(
     price: float = Form(0.0),
     llm_model: str = Form(""),
     llm_prompt: str = Form(""),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Create bot seller"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
     bot_data = BotSellerCreate(
         info=info if info else None,
         price=price if price > 0 else None,
@@ -436,10 +449,16 @@ async def create_matcher(
     buyer_llm_model: str = Form(""),
     buyer_system_prompt: str = Form(""),
     age_limit: int = Form(0),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Create matcher for current user's seller profile"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
     # Parse comma-separated strings
     keywords_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
     context_pages_list = [p.strip() for p in context_pages.split(",") if p.strip()] if context_pages else None
@@ -477,10 +496,16 @@ async def create_bot_matcher(
     bot_seller_id: int = Form(...),
     keywords: str = Form(""),
     min_max_budget: float = Form(0.0),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Create matcher for a bot seller"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
     # Parse comma-separated keywords
     keywords_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
     
