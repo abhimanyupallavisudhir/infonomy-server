@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Form
 from sqlmodel import Session, select
 from infonomy_server.database import create_db_and_tables, get_db
 from infonomy_server.models import User, InfoOffer, DecisionContext
@@ -104,6 +104,38 @@ app.include_router(
     prefix="/api/auth/jwt",
     tags=["auth"],
 )
+
+@app.post("/api/inbox/{inbox_id}/status", tags=["inbox"])
+def update_inbox_status(
+    inbox_id: int,
+    status: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user)
+):
+    """Update inbox item status (new, ignored, responded)"""
+    from infonomy_server.models import MatcherInbox
+    
+    # Get the inbox item
+    inbox_item = db.get(MatcherInbox, inbox_id)
+    if not inbox_item:
+        raise HTTPException(status_code=404, detail="Inbox item not found")
+    
+    # Verify the user owns this inbox item (through their matchers)
+    if not current_user.seller_profile:
+        raise HTTPException(status_code=400, detail="User does not have a seller profile")
+    
+    matcher_ids = [m.id for m in current_user.seller_profile.matchers]
+    if inbox_item.matcher_id not in matcher_ids:
+        raise HTTPException(status_code=403, detail="Not authorized to update this inbox item")
+    
+    # Update status
+    if status in ["new", "ignored", "responded"]:
+        inbox_item.status = status
+        db.add(inbox_item)
+        db.commit()
+        return {"message": "Status updated successfully"}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid status")
 app.include_router(
     fastapi_users.get_register_router(UserRead, UserCreate),
     prefix="/api/auth",

@@ -100,6 +100,39 @@ async def users_page(request: Request, db: Session = Depends(get_db)):
     context["users"] = users
     return templates.TemplateResponse("users.html", context)
 
+@router.get("/users/me", response_class=HTMLResponse)
+async def current_user_profile_page(
+    request: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(current_active_user)
+):
+    """Current user's own profile page"""
+    context = await get_user_context(request, db)
+    
+    # Get user's questions and answers
+    questions = db.exec(
+        select(DecisionContext)
+        .where(DecisionContext.buyer_id == current_user.id)
+        .order_by(DecisionContext.created_at.desc())
+    ).all()
+    
+    answers = []
+    if current_user.seller_profile:
+        answers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.human_seller_id == current_user.seller_profile.id)
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+    
+    context.update({
+        "profile_user": current_user,
+        "questions": questions,
+        "answers": answers,
+        "is_own_profile": True
+    })
+    
+    return templates.TemplateResponse("user_profile.html", context)
+
 @router.get("/users/{user_id}", response_class=HTMLResponse)
 async def user_profile_page(
     request: Request, 
@@ -374,35 +407,36 @@ async def create_matcher(
     db.add(matcher)
     db.commit()
     
-    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER) 
 
-@router.post("/api/inbox/{inbox_id}/status", response_class=HTMLResponse)
-async def update_inbox_status(
+@router.post("/profile/bot-matcher", response_class=HTMLResponse)
+async def create_bot_matcher(
     request: Request,
-    inbox_id: int,
-    status: str = Form(...),
+    bot_seller_id: int = Form(...),
+    keywords: str = Form(""),
+    min_max_budget: float = Form(0.0),
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ):
-    """Update inbox item status (new, ignored, responded)"""
-    # Get the inbox item
-    inbox_item = db.get(MatcherInbox, inbox_id)
-    if not inbox_item:
-        raise HTTPException(status_code=404, detail="Inbox item not found")
+    """Create matcher for a bot seller"""
+    # Parse comma-separated keywords
+    keywords_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
     
-    # Verify the user owns this inbox item (through their matchers)
-    if not current_user.seller_profile:
-        raise HTTPException(status_code=400, detail="User does not have a seller profile")
+    # Verify the bot seller belongs to the current user
+    bot_seller = db.get(BotSeller, bot_seller_id)
+    if not bot_seller or bot_seller.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Bot seller not found")
     
-    matcher_ids = [m.id for m in current_user.seller_profile.matchers]
-    if inbox_item.matcher_id not in matcher_ids:
-        raise HTTPException(status_code=403, detail="Not authorized to update this inbox item")
+    matcher_data = SellerMatcherCreate(
+        keywords=keywords_list,
+        min_max_budget=min_max_budget
+    )
     
-    # Update status
-    if status in ["new", "ignored", "responded"]:
-        inbox_item.status = status
-        db.add(inbox_item)
-        db.commit()
-        return {"message": "Status updated successfully"}
-    else:
-        raise HTTPException(status_code=400, detail="Invalid status") 
+    matcher = SellerMatcher(
+        **matcher_data.dict(),
+        bot_seller_id=bot_seller_id
+    )
+    db.add(matcher)
+    db.commit()
+    
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER) 
