@@ -40,7 +40,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
 
 ### UI improvements
-- [ ] fix the profile page mess
+- [x] fix the profile page mess
 - [ ] implement inspections properly
 - [ ] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
 
