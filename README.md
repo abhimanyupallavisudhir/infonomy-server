@@ -38,6 +38,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] maybe let people other than original buyer also buy info offers
 - [ ] let user customize how many infooffers child llm should wait for
 - [ ] let DecisionContexts have "title" and "details"
+- [ ] recursive answers on answers not bought should not be shown, even if bought
 
 ### misc infra
 - [x] client library

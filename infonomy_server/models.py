@@ -51,7 +51,7 @@ class LLMBuyerType(BaseModel):
     # chooser_system_prompt: str = "You are a helpful assistant."
     # decider_model: str = "openrouter/openai/chatgpt-4o-latest"
     # decider_system_prompt: str = "You are a helpful assistant."
-    max_budget: float = 50.0
+    # max_budget: float = 50.0
     
     def __init__(self, **data):
         super().__init__(**data)

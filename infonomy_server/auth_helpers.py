@@ -20,6 +20,9 @@ async def get_current_user_from_token(
     db: Session = Depends(get_db)
 ) -> Optional[User]:
     """Get current user from JWT token in Authorization header, form data, or cookies"""
+    print(f"=== DEBUG AUTH HELPER ===")
+    print(f"Request headers: {dict(request.headers)}")
+    
     # First try Authorization header
     auth_header = request.headers.get("Authorization")
     token = None
@@ -28,6 +31,7 @@ async def get_current_user_from_token(
         token = auth_header.split(" ")[1]
         print(f"Got token from Authorization header: {token[:20]}...")
     else:
+        print(f"No Authorization header or not Bearer token: {auth_header}")
         # Fallback: check form data for auth_token
         try:
             form_data = await request.form()

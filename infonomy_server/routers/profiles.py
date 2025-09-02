@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from sqlmodel import Session, select
 from infonomy_server.database import get_db
 from infonomy_server.models import (
@@ -25,15 +25,28 @@ from infonomy_server.utils import (
     remove_matcher_from_inboxes,
     get_buyer_stats_summary
 )
+from infonomy_server.auth_helpers import get_current_user_from_token
 
 router = APIRouter(tags=["profiles"])
 
 @router.post("/buyers", response_model=HumanBuyerRead)
-def create_human_buyer(
+async def create_human_buyer(
     human_buyer: HumanBuyerCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user),
+    request: Request,
+    db: Session = Depends(get_db)
 ):
+    # Debug logging
+    print(f"=== DEBUG BUYERS API ===")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Body: {human_buyer}")
+    
+    # Get current user from token
+    current_user = await get_current_user_from_token(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
     # Log buyer profile creation
     log_business_event(api_logger, "buyer_profile_created", user_id=current_user.id, parameters={
 
@@ -80,9 +93,15 @@ def update_current_human_buyer(
 
 
 @router.post("/sellers", response_model=HumanSeller)
-def create_human_seller(
-    db: Session = Depends(get_db), current_user: User = Depends(current_active_user)
+async def create_human_seller(
+    request: Request,
+    db: Session = Depends(get_db)
 ):
+    # Get current user from token
+    current_user = await get_current_user_from_token(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
     # Log seller profile creation start
     log_business_event(api_logger, "seller_profile_creation_started", user_id=current_user.id, parameters={})
     
