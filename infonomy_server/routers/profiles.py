@@ -47,9 +47,18 @@ async def create_human_buyer(
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
+    # Ensure the user does not already have a buyer profile
+    existing_buyer = db.exec(
+        select(HumanBuyer).where(HumanBuyer.id == current_user.id)
+    ).first()
+    if existing_buyer:
+        log_business_event(api_logger, "buyer_profile_creation_failed", user_id=current_user.id, parameters={
+            "error": "profile_already_exists"
+        })
+        raise HTTPException(status_code=400, detail="User already has a buyer profile")
+    
     # Log buyer profile creation
     log_business_event(api_logger, "buyer_profile_created", user_id=current_user.id, parameters={
-
         "has_default_child_llm": bool(human_buyer.default_child_llm)
     })
     

@@ -35,9 +35,9 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] let users put their API keys
 - [x] balances
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
-- [ ] payments
-- [ ] better solution than letting people put their API keys (which allows leakage)
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
+- [ ] recursive answers on answers not bought should not be shown, even if bought
+- [ ] make sure matcher logic is correct
 
 ### UI improvements
 - [x] fix the profile page mess
@@ -51,7 +51,6 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] maybe let people other than original buyer also buy info offers
 - [ ] let user customize how many infooffers child llm should wait for
 - [ ] let DecisionContexts have "title" and "details"
-- [ ] recursive answers on answers not bought should not be shown, even if bought
 
 ### misc infra
 - [x] client library
@@ -61,6 +60,8 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] demo notebook
 - [x] demo with a UI maybe
 - [ ] tests
+- [ ] payments
+- [ ] better solution than letting people put their API keys (which allows leakage)
 
 ### important development
 - [ ] transition to PostgreSQL
@@ -70,5 +71,5 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] verified info
 - [ ] better flexibility in choosing LLM agents
 - [ ] browser extension
-- [ ] UI (maybe Q&A like UI)
+- [x] UI (maybe Q&A like UI)
 - [ ] metaculus bot
