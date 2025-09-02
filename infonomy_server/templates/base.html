@@ -117,7 +117,7 @@
                     .then(user => {
                         // Check if user needs to complete profile
                         if (!user.buyer_profile || !user.seller_profile) {
-                            window.location.href = '/profile';
+                            window.location.href = `/users/${user.id}`;
                         } else {
                             window.location.reload();
                         }

@@ -165,42 +165,7 @@ async def get_current_user_api(
         "seller_profile": context["user"].seller_profile is not None
     }
 
-@router.get("/profile", response_class=HTMLResponse)
-async def profile_setup_page(
-    request: Request, 
-    db: Session = Depends(get_db)
-):
-    """Profile setup page for new users"""
-    context = await get_user_context(request, db)
-    
-    if not context["user"]:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    # Get user's questions and answers for the profile page
-    current_user = context["user"]
-    
-    questions = db.exec(
-        select(DecisionContext)
-        .where(DecisionContext.buyer_id == current_user.id)
-        .order_by(DecisionContext.created_at.desc())
-    ).all()
-    
-    answers = []
-    if current_user.seller_profile:
-        answers = db.exec(
-            select(InfoOffer)
-            .where(InfoOffer.human_seller_id == current_user.seller_profile.id)
-            .order_by(InfoOffer.created_at.desc())
-        ).all()
-    
-    context.update({
-        "profile_user": current_user,
-        "questions": questions,
-        "answers": answers,
-        "is_own_profile": True
-    })
-    
-    return templates.TemplateResponse("profile.html", context)
+
 
 @router.get("/users/me", response_class=HTMLResponse)
 async def current_user_profile_page(
@@ -473,7 +438,7 @@ async def create_seller_profile(
     db.commit()
     db.refresh(seller)
     
-    return RedirectResponse(url="/profile", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
 
 @router.post("/profile/bot-seller", response_class=HTMLResponse)
 async def create_bot_seller(

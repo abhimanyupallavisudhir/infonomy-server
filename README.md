@@ -11,6 +11,12 @@ The key novelty of the system is: the InfoOffers comprise of some "private info"
 To start the server:
 
 ```python
+# create and activate a venv, e.g.
+# uv venv
+# uv sync
+# source .venv/bin/activate
+
+# then in separate terminals
 redis-server
 celery -A celery_app worker --loglevel=info
 fastapi dev infonomy_server/main.py
