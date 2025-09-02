@@ -42,8 +42,9 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 ### UI improvements
 - [x] fix the profile page mess
 - [ ] implement inspections properly
-- [ ] UI for adding API keys
+- [x] UI for adding API keys
 - [ ] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
+- [ ] matcher deletion, update etc.
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
