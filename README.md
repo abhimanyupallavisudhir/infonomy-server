@@ -42,6 +42,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 ### UI improvements
 - [x] fix the profile page mess
 - [ ] implement inspections properly
+- [ ] UI for adding API keys
 - [ ] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
 
 ### simplificatons made

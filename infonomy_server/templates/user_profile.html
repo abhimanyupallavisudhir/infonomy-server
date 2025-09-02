@@ -74,6 +74,37 @@
                             </button>
                         </form>
                     </div>
+                    
+                    <!-- API Keys Section -->
+                    <div class="profile-section">
+                        <h4>API Keys</h4>
+                        <p>Manage your API keys for LLM services.</p>
+                        
+                        <form method="post" action="/profile/api-keys" class="profile-form" id="api-keys-form">
+                            <div class="api-keys-container" id="api-keys-container">
+                                {% if profile_user.api_keys %}
+                                    {% for key_name, key_value in profile_user.api_keys.items() %}
+                                        <div class="api-key-row">
+                                            <input type="text" name="key_names" value="{{ key_name }}" placeholder="Key name" class="api-key-name">
+                                            <input type="text" name="key_values" value="{{ key_value }}" placeholder="Key value" class="api-key-value">
+                                            <button type="button" onclick="removeApiKeyRow(this)" class="btn btn-danger btn-sm">×</button>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="api-key-row">
+                                        <input type="text" name="key_names" placeholder="Key name" class="api-key-name">
+                                        <input type="text" name="key_values" placeholder="Key value" class="api-key-value">
+                                        <button type="button" onclick="removeApiKeyRow(this)" class="btn btn-danger btn-sm">×</button>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="api-keys-actions">
+                                <button type="button" onclick="addApiKeyRow()" class="btn btn-secondary">Add New API Key</button>
+                                <button type="submit" class="btn btn-primary">Save API Keys</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
                 
                 <!-- Matchers Tab -->
@@ -499,6 +530,44 @@
         font-size: 0.875rem;
         margin-left: 1rem;
     }
+    
+    /* API Keys Styling */
+    .api-keys-container {
+        margin-bottom: 1rem;
+    }
+    
+    .api-key-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        gap: 0.5rem;
+    }
+    
+    .api-key-name {
+        flex: 1;
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+    
+    .api-key-value {
+        flex: 2;
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+    
+    .api-keys-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .api-keys-actions .btn {
+        padding: 0.5rem 1rem;
+    }
 </style>
 
 <script>
@@ -554,6 +623,32 @@ function deleteBotMatcher(matcherId) {
     if (confirm('Are you sure you want to delete this bot matcher?')) {
         // TODO: Implement bot matcher deletion
         alert('Bot matcher deletion not yet implemented');
+    }
+}
+
+function addApiKeyRow() {
+    const container = document.getElementById('api-keys-container');
+    const newRow = document.createElement('div');
+    newRow.className = 'api-key-row';
+    newRow.innerHTML = `
+        <input type="text" name="key_names" placeholder="Key name" class="api-key-name">
+        <input type="text" name="key_values" placeholder="Key value" class="api-key-value">
+        <button type="button" onclick="removeApiKeyRow(this)" class="btn btn-danger btn-sm">×</button>
+    `;
+    container.appendChild(newRow);
+}
+
+function removeApiKeyRow(button) {
+    const row = button.parentElement;
+    const container = document.getElementById('api-keys-container');
+    
+    // Don't remove the last row if it's the only one
+    if (container.children.length > 1) {
+        row.remove();
+    } else {
+        // Clear the inputs instead of removing the row
+        const inputs = row.querySelectorAll('input');
+        inputs.forEach(input => input.value = '');
     }
 }
 </script>

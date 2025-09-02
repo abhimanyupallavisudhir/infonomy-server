@@ -564,4 +564,36 @@ async def create_bot_matcher(
     db.add(matcher)
     db.commit()
     
-    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER) 
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/profile/api-keys", response_class=HTMLResponse)
+async def update_api_keys(
+    request: Request,
+    key_names: List[str] = Form(...),
+    key_values: List[str] = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Update user's API keys"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
+    # Build API keys dictionary from form data
+    api_keys = {}
+    for i, key_name in enumerate(key_names):
+        if key_name.strip() and i < len(key_values):
+            key_value = key_values[i].strip()
+            if key_value:  # Only add non-empty keys
+                api_keys[key_name.strip()] = key_value
+    
+    # Update user's API keys
+    current_user.api_keys = api_keys
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
