@@ -37,7 +37,9 @@
         // Handle authentication state
         function updateAuthSection() {
             const authSection = document.getElementById('auth-section');
-            const token = localStorage.getItem('auth_token');
+            const token = getCookie('auth_token');
+            
+            console.log('updateAuthSection called, token:', token ? token.substring(0, 20) + '...' : 'None');
             
             if (token) {
                 // User is logged in
@@ -72,6 +74,8 @@
                 password: formData.get('password')
             };
             
+            console.log('Attempting login with:', data);
+            
             fetch('/api/auth/jwt/login', {
                 method: 'POST',
                 headers: {
@@ -81,8 +85,11 @@
             })
             .then(response => response.json())
             .then(result => {
+                console.log('Login response:', result);
                 if (result.access_token) {
-                    localStorage.setItem('auth_token', result.access_token);
+                    // Store token in cookie instead of localStorage
+                    setCookie('auth_token', result.access_token, 7); // 7 days expiry
+                    console.log('Token stored in cookie:', result.access_token.substring(0, 20) + '...');
                     updateAuthSection();
                     window.location.reload();
                 } else {
@@ -90,14 +97,38 @@
                 }
             })
             .catch(error => {
+                console.error('Login error:', error);
                 alert('Login failed: ' + error.message);
             });
         }
         
         function logout() {
-            localStorage.removeItem('auth_token');
+            // Remove token from cookie
+            deleteCookie('auth_token');
             updateAuthSection();
             window.location.href = '/';
+        }
+        
+        // Cookie utility functions
+        function setCookie(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + value + ';expires=' + expires.toUTCString() + ';path=/';
+        }
+        
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for(let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+        
+        function deleteCookie(name) {
+            document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
         }
         
         // Initialize auth section on page load
@@ -106,7 +137,7 @@
         // Add token to all fetch requests
         const originalFetch = window.fetch;
         window.fetch = function(url, options = {}) {
-            const token = localStorage.getItem('auth_token');
+            const token = getCookie('auth_token');
             if (token && !options.headers) {
                 options.headers = {};
             }
@@ -115,6 +146,21 @@
             }
             return originalFetch(url, options);
         };
+        
+        // Also add token to form submissions
+        document.addEventListener('submit', function(e) {
+            const token = getCookie('auth_token');
+            if (token) {
+                // Add hidden input with token for form submissions
+                if (!e.target.querySelector('input[name="auth_token"]')) {
+                    const tokenInput = document.createElement('input');
+                    tokenInput.type = 'hidden';
+                    tokenInput.name = 'auth_token';
+                    tokenInput.value = token;
+                    e.target.appendChild(tokenInput);
+                }
+            }
+        });
     </script>
     {% block scripts %}{% endblock %}
 </body>

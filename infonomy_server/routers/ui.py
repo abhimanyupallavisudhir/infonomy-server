@@ -19,12 +19,58 @@ templates = Jinja2Templates(directory="infonomy_server/templates")
 
 # Helper function to get user context
 async def get_user_context(request: Request, db: Session):
+    print(f"Headers: {dict(request.headers)}")
     user = await get_current_user_optional(request, db)
+    print(f"User from token: {user.username if user else 'None'}")
     return {
         "request": request,
         "user": user,
         "is_authenticated": user is not None
     }
+
+@router.get("/debug/auth", response_class=HTMLResponse)
+async def debug_auth(request: Request, db: Session = Depends(get_db)):
+    """Debug endpoint to test authentication"""
+    print("=== DEBUG AUTH ===")
+    print(f"Headers: {dict(request.headers)}")
+    
+    # Check cookies for auth_token
+    cookie_header = request.headers.get("cookie")
+    auth_token_from_cookie = None
+    if cookie_header:
+        for cookie in cookie_header.split(";"):
+            if "auth_token=" in cookie:
+                auth_token_from_cookie = cookie.split("auth_token=")[1].split(";")[0].strip()
+                print(f"Auth token from cookie: {auth_token_from_cookie[:20] if auth_token_from_cookie else 'None'}...")
+                break
+    
+    # Try to get user from token
+    user = await get_current_user_optional(request, db)
+    print(f"User from token: {user.username if user else 'None'}")
+    
+    # Check form data for auth_token
+    try:
+        form_data = await request.form()
+        auth_token = form_data.get("auth_token")
+        print(f"Auth token from form: {auth_token[:20] if auth_token else 'None'}...")
+    except:
+        print("No form data")
+    
+    return f"""
+    <html>
+        <body>
+            <h1>Auth Debug</h1>
+            <p>User: {user.username if user else 'None'}</p>
+            <p>Headers: {dict(request.headers)}</p>
+            <p>Token in cookie: {auth_token_from_cookie[:20] if auth_token_from_cookie else 'None'}...</p>
+            <p>Token in localStorage: <span id="token-display">Loading...</span></p>
+            <script>
+                const token = localStorage.getItem('auth_token');
+                document.getElementById('token-display').textContent = token ? token.substring(0, 20) + '...' : 'None';
+            </script>
+        </body>
+    </html>
+    """
 
 @router.get("/", response_class=HTMLResponse)
 async def home_page(request: Request, db: Session = Depends(get_db)):
@@ -103,11 +149,15 @@ async def users_page(request: Request, db: Session = Depends(get_db)):
 @router.get("/users/me", response_class=HTMLResponse)
 async def current_user_profile_page(
     request: Request, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Current user's own profile page"""
     context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
     
     # Get user's questions and answers
     questions = db.exec(
@@ -191,10 +241,16 @@ async def create_question(
     context_pages: str = Form(""),
     max_budget: float = Form(...),
     priority: int = Form(0),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Handle new question creation"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
     # Parse context_pages from comma-separated string
     context_pages_list = [p.strip() for p in context_pages.split(",") if p.strip()] if context_pages else None
     
@@ -240,10 +296,16 @@ async def create_answer(
     private_info: str = Form(...),
     public_info: str = Form(""),
     price: float = Form(0.0),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(current_active_user)
+    db: Session = Depends(get_db)
 ):
     """Handle new answer creation"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
     # Get the context
     ctx = db.get(DecisionContext, question_id)
     if not ctx:
