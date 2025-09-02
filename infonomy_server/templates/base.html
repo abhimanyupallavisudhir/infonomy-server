@@ -106,7 +106,26 @@
                     setCookie('auth_token', result.access_token, 7); // 7 days expiry
                     console.log('Token stored in cookie:', result.access_token.substring(0, 20) + '...');
                     updateAuthSection();
-                    window.location.reload();
+                    
+                    // Check if user has both profiles, if not redirect to profile page
+                    fetch('/api/users/me', {
+                        headers: {
+                            'Authorization': `Bearer ${result.access_token}`
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(user => {
+                        // Check if user needs to complete profile
+                        if (!user.buyer_profile || !user.seller_profile) {
+                            window.location.href = '/profile';
+                        } else {
+                            window.location.reload();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking user profile:', error);
+                        window.location.reload();
+                    });
                 } else {
                     alert('Login failed');
                 }

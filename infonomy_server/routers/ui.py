@@ -146,6 +146,25 @@ async def users_page(request: Request, db: Session = Depends(get_db)):
     context["users"] = users
     return templates.TemplateResponse("users.html", context)
 
+@router.get("/api/users/me")
+async def get_current_user_api(
+    request: Request, 
+    db: Session = Depends(get_db)
+):
+    """Get current user info for API calls"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    return {
+        "id": context["user"].id,
+        "username": context["user"].username,
+        "email": context["user"].email,
+        "buyer_profile": context["user"].buyer_profile is not None,
+        "seller_profile": context["user"].seller_profile is not None
+    }
+
 @router.get("/profile", response_class=HTMLResponse)
 async def profile_setup_page(
     request: Request, 
@@ -156,6 +175,30 @@ async def profile_setup_page(
     
     if not context["user"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Get user's questions and answers for the profile page
+    current_user = context["user"]
+    
+    questions = db.exec(
+        select(DecisionContext)
+        .where(DecisionContext.buyer_id == current_user.id)
+        .order_by(DecisionContext.created_at.desc())
+    ).all()
+    
+    answers = []
+    if current_user.seller_profile:
+        answers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.human_seller_id == current_user.seller_profile.id)
+            .order_by(InfoOffer.created_at.desc())
+        ).all()
+    
+    context.update({
+        "profile_user": current_user,
+        "questions": questions,
+        "answers": answers,
+        "is_own_profile": True
+    })
     
     return templates.TemplateResponse("profile.html", context)
 
