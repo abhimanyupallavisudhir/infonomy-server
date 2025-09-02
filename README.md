@@ -33,6 +33,11 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] better solution than letting people put their API keys (which allows leakage)
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
 
+### UI improvements
+- [ ] fix the profile page mess
+- [ ] implement inspections properly
+- [ ] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
+
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
 - [ ] maybe let people other than original buyer also buy info offers
@@ -46,7 +51,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] better logging of full inspection chain
 - [ ] notifications for InfoOffers received and inspections completed
 - [x] demo notebook
-- [ ] demo with a UI maybe
+- [x] demo with a UI maybe
 - [ ] tests
 
 ### important development
