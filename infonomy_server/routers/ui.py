@@ -310,7 +310,7 @@ async def create_question(
     query: str = Form(...),
     context_pages: str = Form(""),
     max_budget: float = Form(...),
-    priority: int = Form(0),
+    priority: int = Form(1),
     db: Session = Depends(get_db)
 ):
     """Handle new question creation"""
@@ -429,7 +429,10 @@ async def inspect_answer(
 @router.post("/profile/buyer", response_class=HTMLResponse)
 async def create_buyer_profile(
     request: Request,
-    default_child_llm: str = Form(...),
+    llm_name: str = Form(...),
+    llm_description: str = Form(...),
+    llm_model: str = Form(...),
+    llm_custom_prompt: str = Form(""),
     db: Session = Depends(get_db)
 ):
     """Create or update buyer profile"""
@@ -442,8 +445,13 @@ async def create_buyer_profile(
     
     from infonomy_server.models import LLMBuyerType
     
-    # Create LLMBuyerType instance and convert to dict for JSON storage
-    llm_buyer = LLMBuyerType(name=default_child_llm)
+    # Create LLMBuyerType instance with all form fields and convert to dict for JSON storage
+    llm_buyer = LLMBuyerType(
+        name=llm_name,
+        description=llm_description,
+        model=llm_model,
+        custom_prompt=llm_custom_prompt if llm_custom_prompt else None
+    )
     llm_buyer_dict = llm_buyer.dict()
     
     buyer_data = HumanBuyerCreate(

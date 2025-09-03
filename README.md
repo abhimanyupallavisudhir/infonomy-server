@@ -36,7 +36,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] balances
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
-- [ ] recursive answers on answers not bought should not be shown, even if bought
+- [ ] **recursive answers on answers not bought should not be shown, even if bought**
 - [ ] make sure matcher logic is correct
 
 ### UI improvements
@@ -61,6 +61,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] demo with a UI maybe
 - [ ] tests
 - [ ] payments
+- [ ] better login system
 - [ ] better solution than letting people put their API keys (which allows leakage)
 
 ### important development

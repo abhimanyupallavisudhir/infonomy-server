@@ -34,7 +34,10 @@
                         {% if profile_user.buyer_profile %}
                             <div class="current-profile">
                                 <p><strong>✓ Buyer Profile Created</strong></p>
-                                <p><strong>Default Child LLM:</strong> {{ profile_user.buyer_profile.default_child_llm.name }}</p>
+                                <p><strong>Name:</strong> {{ profile_user.buyer_profile.default_child_llm.name }}</p>
+                                <p><strong>Description:</strong> {{ profile_user.buyer_profile.default_child_llm.description }}</p>
+                                <p><strong>Model:</strong> {{ profile_user.buyer_profile.default_child_llm.model }}</p>
+                                <p><strong>Custom Prompt:</strong> {{ profile_user.buyer_profile.default_child_llm.custom_prompt[:100] }}{% if profile_user.buyer_profile.default_child_llm.custom_prompt|length > 100 %}...{% endif %}</p>
                             </div>
                         {% else %}
                             <p>Create a buyer profile to ask questions and purchase information.</p>
@@ -42,13 +45,23 @@
                         
                         <form method="post" action="/profile/buyer" class="profile-form">
                             <div class="form-group">
-                                <label for="default_child_llm">Default Child LLM:</label>
-                                <select name="default_child_llm" id="default_child_llm" required>
-                                    <option value="gpt-4">GPT-4</option>
-                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                                    <option value="claude-3">Claude 3</option>
-                                    <option value="claude-2">Claude 2</option>
-                                </select>
+                                <label for="llm_name">Name:</label>
+                                <input type="text" name="llm_name" id="llm_name" value="{{ profile_user.buyer_profile.default_child_llm.name if profile_user.buyer_profile else 'gpt-4o_basic' }}" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="llm_description">Description:</label>
+                                <input type="text" name="llm_description" id="llm_description" value="{{ profile_user.buyer_profile.default_child_llm.description if profile_user.buyer_profile else 'basic GPT-4o LLM buyer' }}" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="llm_model">Model:</label>
+                                <input type="text" name="llm_model" id="llm_model" value="{{ profile_user.buyer_profile.default_child_llm.model if profile_user.buyer_profile else 'openrouter/openai/chatgpt-4o-latest' }}" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="llm_custom_prompt">Custom Prompt:</label>
+                                <textarea name="llm_custom_prompt" id="llm_custom_prompt" rows="4" placeholder="Unless you know what you are doing, LEAVE THIS BLANK and edit it after creating the buyer profile.">{{ profile_user.buyer_profile.default_child_llm.custom_prompt if profile_user.buyer_profile else '' }}</textarea>
                             </div>
                             
                             <button type="submit" class="btn btn-primary">
