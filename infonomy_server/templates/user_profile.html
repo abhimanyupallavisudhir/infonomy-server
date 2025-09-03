@@ -8,7 +8,8 @@
         <div class="profile-header">
             <h1 class="profile-title">{{ profile_user.username }}'s Profile</h1>
             <div class="profile-meta">
-                <span class="balance">Balance: ${{ "%.2f"|format(profile_user.balance) }}</span>
+                <span class="balance">Total Balance: ${{ "%.2f"|format(profile_user.balance) }}</span>
+                <span class="available-balance">Available Balance: ${{ "%.2f"|format(profile_user.available_balance) }}</span>
                 <span class="member-since">Member since: {{ profile_user.created_at.strftime('%Y-%m-%d') }}</span>
             </div>
         </div>
@@ -435,10 +436,24 @@
     .profile-meta {
         color: #666;
         font-size: 0.9rem;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
     }
     
     .profile-meta span {
-        margin: 0 0.5rem;
+        margin: 0;
+    }
+    
+    .balance {
+        color: #28a745;
+        font-weight: bold;
+    }
+    
+    .available-balance {
+        color: #17a2b8;
+        font-weight: bold;
     }
     
     /* Tab styles */
