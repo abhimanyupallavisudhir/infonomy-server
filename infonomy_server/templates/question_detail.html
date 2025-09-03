@@ -62,18 +62,25 @@
         {% endif %}
         
         <div class="answers-section">
-            <h3>Answers ({{ info_offers|length }})</h3>
+            <h3>Answers ({{ info_offers_data|length }})</h3>
             
-            {% if info_offers %}
+            {% if info_offers_data %}
                 <div class="answers-list">
-                    {% for answer in info_offers %}
+                    {% for item in info_offers_data %}
+                        {% set answer = item.info_offer %}
+                        {% set human_seller = item.human_seller %}
+                        {% set bot_seller = item.bot_seller %}
+                        {% set bot_seller_owner = item.bot_seller_owner %}
+                        
                         <div class="answer-card" data-answer-id="{{ answer.id }}">
                             <div class="answer-header">
                                 <span class="seller-info">
-                                    {% if answer.human_seller_id %}
-                                        <a href="/users/{{ answer.human_seller_id }}">Human Seller</a>
+                                    {% if human_seller %}
+                                        <a href="/users/{{ human_seller.id }}" class="seller-link">{{ human_seller.username }}</a>
+                                    {% elif bot_seller and bot_seller_owner %}
+                                        Bot seller {{ bot_seller.id }} of <a href="/users/{{ bot_seller_owner.id }}" class="seller-link">{{ bot_seller_owner.username }}</a>
                                     {% else %}
-                                        Bot Seller
+                                        Unknown Seller
                                     {% endif %}
                                 </span>
                                 <span class="price">${{ "%.2f"|format(answer.price) }}</span>
@@ -263,6 +270,22 @@ function resetInspectionUI() {
     
     .hidden {
         display: none;
+    }
+    
+    .seller-link {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .seller-link:hover {
+        color: #0056b3;
+        text-decoration: underline;
+    }
+    
+    .seller-info {
+        font-weight: 500;
+        color: #495057;
     }
 </style>
 {% endblock %} 

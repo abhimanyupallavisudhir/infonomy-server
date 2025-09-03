@@ -134,19 +134,38 @@ async def question_detail_page(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
-    # Get all info offers for this question
-    info_offers = db.exec(
-        select(InfoOffer)
+    # Get all info offers for this question with seller information
+    info_offers_with_sellers = db.exec(
+        select(InfoOffer, User, BotSeller)
+        .outerjoin(User, InfoOffer.human_seller_id == User.id)
+        .outerjoin(BotSeller, InfoOffer.bot_seller_id == BotSeller.id)
         .where(InfoOffer.context_id == question_id)
         .order_by(InfoOffer.created_at.asc())
     ).all()
+    
+    # Extract info offers and seller info
+    info_offers_data = []
+    for result in info_offers_with_sellers:
+        info_offer, human_seller, bot_seller = result
+        
+        # Get bot seller owner info if it's a bot seller
+        bot_seller_owner = None
+        if bot_seller:
+            bot_seller_owner = db.get(User, bot_seller.user_id)
+        
+        info_offers_data.append({
+            "info_offer": info_offer,
+            "human_seller": human_seller,
+            "bot_seller": bot_seller,
+            "bot_seller_owner": bot_seller_owner
+        })
     
     # Get buyer info to check if current user is the question poster
     buyer = db.get(User, question.buyer_id)
     
     context.update({
         "question": question,
-        "info_offers": info_offers,
+        "info_offers_data": info_offers_data,
         "buyer": buyer,
         "is_question_owner": context["user"] and context["user"].id == question.buyer_id
     })
