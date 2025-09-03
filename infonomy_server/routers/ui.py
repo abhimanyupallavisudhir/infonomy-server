@@ -77,14 +77,23 @@ async def home_page(request: Request, db: Session = Depends(get_db)):
     """Home page with questions list and new question form"""
     context = await get_user_context(request, db)
     
-    # Get recent questions
+    # Get recent questions with buyer information
     questions = db.exec(
-        select(DecisionContext)
+        select(DecisionContext, User)
+        .join(User, DecisionContext.buyer_id == User.id)
         .order_by(DecisionContext.created_at.desc())
         .limit(50)
     ).all()
     
-    context["questions"] = questions
+    # Extract questions and buyers from the joined results
+    questions_with_buyers = []
+    for question, buyer in questions:
+        questions_with_buyers.append({
+            "question": question,
+            "buyer": buyer
+        })
+    
+    context["questions_with_buyers"] = questions_with_buyers
     return templates.TemplateResponse("home.html", context)
 
 @router.get("/questions", response_class=HTMLResponse)
@@ -92,14 +101,23 @@ async def questions_page(request: Request, db: Session = Depends(get_db)):
     """Questions listing page"""
     context = await get_user_context(request, db)
     
-    # Get recent questions
+    # Get recent questions with buyer information
     questions = db.exec(
-        select(DecisionContext)
+        select(DecisionContext, User)
+        .join(User, DecisionContext.buyer_id == User.id)
         .order_by(DecisionContext.created_at.desc())
         .limit(100)
     ).all()
     
-    context["questions"] = questions
+    # Extract questions and buyers from the joined results
+    questions_with_buyers = []
+    for question, buyer in questions:
+        questions_with_buyers.append({
+            "question": question,
+            "buyer": buyer
+        })
+    
+    context["questions_with_buyers"] = questions_with_buyers
     return templates.TemplateResponse("questions.html", context)
 
 @router.get("/questions/{question_id}", response_class=HTMLResponse)

@@ -6,13 +6,16 @@
 <div class="container">
     <h1 class="page-title">All Questions</h1>
     
-    {% if questions %}
+    {% if questions_with_buyers %}
         <div class="questions-list">
-            {% for question in questions %}
+            {% for item in questions_with_buyers %}
+                {% set question = item.question %}
+                {% set buyer = item.buyer %}
                 <div class="question-card">
                     <div class="question-header">
                         <h3><a href="/questions/{{ question.id }}">{{ question.query or "No title" }}</a></h3>
                         <span class="question-meta">
+                            by <a href="/users/{{ buyer.id }}" class="username-link">{{ buyer.username }}</a> | 
                             Budget: ${{ "%.2f"|format(question.max_budget) }} | 
                             Priority: {{ question.priority }} | 
                             {{ question.created_at.strftime('%Y-%m-%d %H:%M') }}
@@ -33,4 +36,23 @@
         <p>No questions found.</p>
     {% endif %}
 </div>
+
+<style>
+    .username-link {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .username-link:hover {
+        color: #0056b3;
+        text-decoration: underline;
+    }
+    
+    .question-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+        line-height: 1.4;
+    }
+</style>
 {% endblock %} 
