@@ -38,6 +38,11 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
 - [ ] **recursive answers on answers not bought should not be shown, even if bought**
 - [ ] make sure matcher logic is correct
+  - [ ] case-insenstive matching, or regex-based matching if given a prefix
+  - [ ] make sure all matcher attrs can be set when creating one 
+  - [ ] make sure bot seller matcher inboxes are populated when new matcher is created (they're not)
+  - [ ] maybe instead of having these inboxes update separately we can have it just be a query
+- [ ] make sure balances (both .balance and .available_balance) are updated when bot seller infooffers are bought and sold
 
 ### UI improvements
 - [x] fix the profile page mess
@@ -45,6 +50,8 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] UI for adding API keys
 - [x] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
 - [x] matcher deletion, update etc.
+- [ ] recursive decision contexts should not appear on the questions list (either at /questions or at /)
+- [ ] make sure correct display for recursive info offers
 
 ### simplificatons made
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
