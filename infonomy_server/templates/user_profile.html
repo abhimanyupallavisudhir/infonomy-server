@@ -360,11 +360,13 @@
                     {% endif %}
                     
                     <h3>My Answers</h3>
-                    {% if answers %}
+                    {% if answers_with_questions %}
                         <div class="answers-list">
-                            {% for answer in answers %}
+                            {% for item in answers_with_questions %}
+                                {% set answer = item.answer %}
+                                {% set question = item.question %}
                                 <div class="answer-item">
-                                    <a href="/questions/{{ answer.context_id }}">{{ answer.private_info[:100] }}...</a>
+                                    <a href="/questions/{{ answer.context_id }}">{{ question.query[:100] }}...</a>
                                     <span class="answer-meta">${{ "%.2f"|format(answer.price) }}</span>
                                 </div>
                             {% endfor %}
@@ -395,11 +397,13 @@
                 
                 <div class="profile-section">
                     <h3>Answers Provided</h3>
-                    {% if answers %}
+                    {% if answers_with_questions %}
                         <div class="answers-list">
-                            {% for answer in answers %}
+                            {% for item in answers_with_questions %}
+                                {% set answer = item.answer %}
+                                {% set question = item.question %}
                                 <div class="answer-item">
-                                    <a href="/questions/{{ answer.context_id }}">View Question</a>
+                                    <a href="/questions/{{ answer.context_id }}">{{ question.query[:100] }}...</a>
                                     <span class="meta">${{ "%.2f"|format(answer.price) }} | {{ answer.created_at.strftime('%Y-%m-%d') }}</span>
                                 </div>
                             {% endfor %}

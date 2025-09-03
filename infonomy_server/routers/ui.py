@@ -224,18 +224,26 @@ async def current_user_profile_page(
         .order_by(DecisionContext.created_at.desc())
     ).all()
     
-    answers = []
+    # Get user's answers with question information
+    answers_with_questions = []
     if current_user.seller_profile:
-        answers = db.exec(
-            select(InfoOffer)
+        answers_data = db.exec(
+            select(InfoOffer, DecisionContext)
+            .join(DecisionContext, InfoOffer.context_id == DecisionContext.id)
             .where(InfoOffer.human_seller_id == current_user.seller_profile.id)
             .order_by(InfoOffer.created_at.desc())
         ).all()
+        
+        for answer, question in answers_data:
+            answers_with_questions.append({
+                "answer": answer,
+                "question": question
+            })
     
     context.update({
         "profile_user": current_user,
         "questions": questions,
-        "answers": answers,
+        "answers_with_questions": answers_with_questions,
         "is_own_profile": True
     })
     
@@ -262,18 +270,26 @@ async def user_profile_page(
         .order_by(DecisionContext.created_at.desc())
     ).all()
     
-    answers = []
+    # Get user's answers with question information
+    answers_with_questions = []
     if user.seller_profile:
-        answers = db.exec(
-            select(InfoOffer)
+        answers_data = db.exec(
+            select(InfoOffer, DecisionContext)
+            .join(DecisionContext, InfoOffer.context_id == DecisionContext.id)
             .where(InfoOffer.human_seller_id == user.seller_profile.id)
             .order_by(InfoOffer.created_at.desc())
         ).all()
+        
+        for answer, question in answers_data:
+            answers_with_questions.append({
+                "answer": answer,
+                "question": question
+            })
     
     context.update({
         "profile_user": user,
         "questions": questions,
-        "answers": answers,
+        "answers_with_questions": answers_with_questions,
         "is_own_profile": context["user"] and context["user"].id == user_id
     })
     
