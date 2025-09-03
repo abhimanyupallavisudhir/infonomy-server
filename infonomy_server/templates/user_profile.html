@@ -57,6 +57,7 @@
                             <div class="form-group">
                                 <label for="llm_model">Model:</label>
                                 <input type="text" name="llm_model" id="llm_model" value="{{ profile_user.buyer_profile.default_child_llm.model if profile_user.buyer_profile else 'openrouter/openai/chatgpt-4o-latest' }}" required>
+                                <small class="form-text">Please use <a href="https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json" target="_blank">litellm specifications</a> for model naming.</small>
                             </div>
                             
                             <div class="form-group">
