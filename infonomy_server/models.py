@@ -7,7 +7,7 @@ from typing import Optional, List, Literal
 from pydantic import ConfigDict, BaseModel, model_validator
 import datetime
 
-# Association table for the many-to-many relationship between DecisionContext and InfoOffer
+# Association table for the many-to-many relationship between recursive DecisionContexts and their parent InfoOffers
 decision_context_parent_offers = Table(
     'decision_context_parent_offers',
     SQLModel.metadata,

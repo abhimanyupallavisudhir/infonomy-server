@@ -36,8 +36,14 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] balances
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
-- [ ] **recursive answers on answers not bought should not be shown, even if bought**
 - [ ] make sure matcher logic is correct
+
+### inspection improvements
+- [ ] **recursive answers on answers not bought should not be shown, even if bought**
+- [ ] way to access previous recursive info offers in an inspection
+- [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
+- [ ] maybe let people other than original buyer also buy info offers
+- [ ] let user customize how many infooffers child llm should wait for
 
 ### UI improvements
 - [x] fix the profile page mess
@@ -47,9 +53,6 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] matcher deletion, update etc.
 
 ### simplificatons made
-- [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
-- [ ] maybe let people other than original buyer also buy info offers
-- [ ] let user customize how many infooffers child llm should wait for
 - [ ] let DecisionContexts have "title" and "details"
 
 ### misc infra
