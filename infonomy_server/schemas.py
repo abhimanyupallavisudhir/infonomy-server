@@ -210,6 +210,7 @@ class InspectionRead(SQLModel):
     buyer_id: int
     child_context_id: Optional[int]
     purchased: List[int]
+    job_id: Optional[str]
     created_at: datetime
 
     class Config:

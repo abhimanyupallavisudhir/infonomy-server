@@ -87,6 +87,12 @@ def create_inspection(
         args=[inspection.id],
     )
     
+    # Set the job_id on the inspection object
+    inspection.job_id = async_result.id
+    db.add(inspection)
+    db.commit()
+    db.refresh(inspection)
+    
     # Log successful job creation
     log_business_event(inspection_logger, "inspection_job_created", user_id=current_user.id, parameters={
         "inspection_id": inspection.id,
@@ -95,16 +101,7 @@ def create_inspection(
         "max_budget": ctx.max_budget
     })
 
-    # Return inspection data with job_id for UI tracking
-    return {
-        "id": inspection.id,
-        "decision_context_id": inspection.decision_context_id,
-        "buyer_id": inspection.buyer_id,
-        "child_context_id": inspection.child_context_id,
-        "purchased": inspection.purchased,
-        "created_at": inspection.created_at,
-        "job_id": async_result.id
-    }
+    return inspection
 
 
 @router.get("/inspections/{inspection_id}", response_model=InspectionRead)
