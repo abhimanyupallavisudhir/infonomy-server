@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 from sqlmodel import Session, select
 
@@ -12,21 +12,21 @@ from infonomy_server.utils import (
     increment_buyer_inspected_counter,
     increment_buyer_purchased_counter
 )
-from infonomy_server.llm import call_llm, completion  # your wrapper around the child‐LLM
+from infonomy_server.llm import call_llm
 from infonomy_server.models import (
     DecisionContext,
     InfoOffer,
     HumanBuyer,
     SellerMatcher,
-    MatcherInbox,
     BotSeller,
     User,
     LLMBuyerType,
+    Inspection,
 )
 from infonomy_server.logging_config import (
-    celery_logger, bot_sellers_logger, inspection_logger, 
-    log_celery_task, log_business_event, log_function_call, 
-    log_function_return, log_function_error, logged_function
+    celery_logger, bot_sellers_logger, 
+    log_celery_task, log_business_event, 
+    log_function_error
 )
 
 
@@ -171,7 +171,7 @@ def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, 
             private_info, public_info, llm_price = _call_bot_seller_llm(bot_seller, context)
             # Use the price returned by the LLM, but ensure it's within budget
             price = min(llm_price, context.max_budget)
-        except Exception as e:
+        except Exception:
             # If LLM call fails, don't create an offer
             return None
     else:
@@ -332,98 +332,86 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
 @celery.task(bind=True)
 def inspect_task(
     self,
-    context_id: int,
-    buyer_id: int,
-    purchased: Optional[List[int]] = None,
+    inspection_id: int,
     depth=0,
     breadth=0,
     max_depth=3,
     max_breadth=3,
 ) -> List[int]:
     """
-    1) Load the context & all current InfoOffers
+    New inspection system using Inspection model:
+    1) Load the inspection and its associated InfoOffers
     2) Call LLM to choose offers or ask for a child context
-    3) If offers chosen: record them, remove from available, recurse
+    3) If offers chosen: record them in inspection.purchased and user.purchased_info_offers
     4) If child context requested: create it, recompute inbox, wait for offers, recurse
     5) When done: return full list of purchased offer IDs
-    TODO: Right now this inspects *all* info offers, we might want to customize that later.
     """
-    if purchased is None:
-        purchased = []
     
     # Log task start
     task_id = self.request.id if hasattr(self.request, 'id') else 'unknown'
     log_celery_task(celery_logger, "inspect_task", task_id, {
-        "context_id": context_id,
-        "buyer_id": buyer_id,
+        "inspection_id": inspection_id,
         "depth": depth,
         "breadth": breadth,
         "max_depth": max_depth,
-        "max_breadth": max_breadth,
-        "purchased_count": len(purchased)
+        "max_breadth": max_breadth
     })
     
     session = Session(engine)
     
     try:
         if depth >= max_depth or breadth >= max_breadth:
-            # If this is a top-level context and we're hitting limits, restore the max_budget to available_balance
+            # If this is a top-level inspection and we're hitting limits, restore the max_budget to available_balance
             if depth == 0:
-                # Load context & buyer to get the max_budget
-                ctx = session.get(DecisionContext, context_id)
-                buyer = session.get(HumanBuyer, buyer_id)
-                if ctx and buyer:
-                    user = session.get(User, buyer.id)
-                    if user:
+                inspection = session.get(Inspection, inspection_id)
+                if inspection:
+                    ctx = inspection.decision_context
+                    user = session.get(User, inspection.buyer_id)
+                    if ctx and user:
                         # Restore the max_budget to available_balance since no purchases were made
                         user.available_balance += ctx.max_budget
                         session.add(user)
                         session.commit()
             
-            return purchased
+            return inspection.purchased if inspection else []
 
-        # Load context & buyer
-        ctx = session.get(DecisionContext, context_id)
-        buyer = session.get(HumanBuyer, buyer_id)
-        if not ctx or not buyer:
-            return purchased or []
+        # Load inspection and related data
+        inspection = session.get(Inspection, inspection_id)
+        if not inspection:
+            log_business_event(celery_logger, "inspection_not_found", parameters={
+                "inspection_id": inspection_id
+            })
+            return []
 
-        # 1) Fetch all available InfoOffers for this ctx
-        # not sure about whether we should let them re-inspect inspected offers
-        # but for now we do not TODO
-        offers: List[InfoOffer] = session.exec(
-            select(InfoOffer)
-            .where(InfoOffer.context_id == context_id)
-            .where(InfoOffer.purchased == False)
-            .where(InfoOffer.inspected == False)
-        ).all()
+        ctx = inspection.decision_context
+        buyer = session.get(HumanBuyer, inspection.buyer_id)
+        user = session.get(User, inspection.buyer_id)
+        
+        if not ctx or not buyer or not user:
+            return inspection.purchased
+
+        # 1) Fetch InfoOffers associated with this inspection
+        offers: List[InfoOffer] = inspection.info_offers
 
         if not offers:
-            # no more offers to inspect → finish
-            # If this is a top-level context and we're done, restore the max_budget to available_balance
+            # no offers to inspect → finish
+            # If this is a top-level inspection and we're done, restore the max_budget to available_balance
             if depth == 0:
-                user = session.get(User, buyer.id)
-                if user:
-                    # Restore the max_budget to available_balance since no purchases were made
-                    user.available_balance += ctx.max_budget
-                    session.add(user)
-                    session.commit()
+                # Restore the max_budget to available_balance since no purchases were made
+                user.available_balance += ctx.max_budget
+                session.add(user)
+                session.commit()
             
-            return purchased
+            return inspection.purchased
 
-        # just for the LLM
+        # Get previously purchased offers for the LLM context
         known_info: List[InfoOffer] = []
-        for p in purchased:
-            off = session.get(InfoOffer, p)
+        for offer_id in user.purchased_info_offers:
+            off = session.get(InfoOffer, offer_id)
             if off:
                 known_info.append(off)
 
-        # 2) Invoke your LLM with full, private offer data
-        #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
-        
-        # Get the user to pass their API keys to the LLM
-        user = session.get(User, buyer.id)
-        print(f"DEBUG: {buyer.default_child_llm}")
+        # 2) Invoke LLM with full, private offer data
         chosen_ids, child_ctx = call_llm(
             context=ctx, 
             offers=offers, 
@@ -431,9 +419,6 @@ def inspect_task(
             buyer=LLMBuyerType(**buyer.default_child_llm),
             user=user
         )
-
-        for offer in offers:
-            offer.inspected = True
 
         # Increment the buyer's inspected counter for this priority level
         # Only increment once per context, not per offer
@@ -443,10 +428,13 @@ def inspect_task(
 
         # 3a) If LLM picked any offers → "buy" them
         if chosen_ids:
-            for oid in chosen_ids:
-                off = session.get(InfoOffer, oid)
-                off.purchased = True
-            purchased.extend(chosen_ids)
+            # Update inspection.purchased
+            inspection.purchased.extend(chosen_ids)
+            
+            # Update user.purchased_info_offers
+            for offer_id in chosen_ids:
+                if offer_id not in user.purchased_info_offers:
+                    user.purchased_info_offers.append(offer_id)
             
             # Increment the buyer's purchased counter for this priority level
             # Only increment once per context, not per offer
@@ -455,27 +443,20 @@ def inspect_task(
                 increment_buyer_purchased_counter(buyer, ctx.priority, session)
                 
                 # Handle balance logic for top-level contexts only
-                # Get the user to update their balance
-                user = session.get(User, buyer.id)
-                if user:
-                    # Calculate total cost of purchased offers
-                    total_cost = sum(off.price for off in offers if off.id in chosen_ids)
-                    # Deduct from actual balance
-                    user.balance -= total_cost
-                    # Restore the max_budget to available_balance
-                    user.available_balance += ctx.max_budget
-                    session.add(user)
+                # Calculate total cost of purchased offers
+                total_cost = sum(off.price for off in offers if off.id in chosen_ids)
+                # Deduct from actual balance
+                user.balance -= total_cost
+                # Restore the max_budget to available_balance
+                user.available_balance += ctx.max_budget
+                session.add(user)
             
-            # # remove those offers from future consideration
-            # session.exec(
-            #     select(InfoOffer).where(InfoOffer.id.in_(chosen_ids))
-            # ).scalars().delete(synchronize_session="fetch")
+            session.add(inspection)
             session.commit()
-            # recurse on the same context
+            
+            # recurse on the same inspection
             return inspect_task(
-                context_id=context_id,
-                buyer_id=buyer_id,
-                purchased=purchased,
+                inspection_id=inspection_id,
                 depth=depth,
                 breadth=breadth + 1,
                 max_depth=max_depth,
@@ -488,6 +469,20 @@ def inspect_task(
             session.add(child_ctx)
             session.commit()
             session.refresh(child_ctx)
+
+            # Create a new Inspection for the child context
+            child_inspection = Inspection(
+                decision_context_id=child_ctx.id,
+                buyer_id=inspection.buyer_id,
+                created_at=datetime.utcnow()
+            )
+            session.add(child_inspection)
+            session.commit()
+            session.refresh(child_inspection)
+
+            # Update the parent inspection to reference the child context
+            inspection.child_context_id = child_ctx.id
+            session.add(inspection)
 
             # notify sellers via your inbox‑recompute helper
             recompute_inbox_for_context(child_ctx, session)
@@ -520,7 +515,6 @@ def inspect_task(
                 count = session.exec(
                     select(InfoOffer)
                     .where(InfoOffer.context_id == child_ctx.id)
-                    .where(InfoOffer.purchased == False)
                 ).count()
                 
                 elapsed_time = time.time() - start_time
@@ -535,13 +529,9 @@ def inspect_task(
                 else:
                     time.sleep(BOTSELLER_POLL_INTERVAL_SLOW)  # Check every 3 seconds for human sellers
             
-            # recurse into the child context
-            # don't need to include a selection of the offers here,
-            # because again we are inspecting all offers
+            # recurse into the child inspection
             return inspect_task(
-                context_id=child_ctx.id,
-                buyer_id=buyer_id,
-                purchased=purchased,
+                inspection_id=child_inspection.id,
                 depth=depth + 1,
                 breadth=breadth,
                 max_depth=max_depth,
@@ -549,22 +539,19 @@ def inspect_task(
             )
 
         # 4) Nothing to buy and no child → we're done
-        # If this is a top-level context and we're done, restore the max_budget to available_balance
+        # If this is a top-level inspection and we're done, restore the max_budget to available_balance
         if depth == 0:
-            user = session.get(User, buyer.user_id)
-            if user:
-                # Restore the max_budget to available_balance since no purchases were made
-                user.available_balance += ctx.max_budget
-                session.add(user)
-                session.commit()
+            # Restore the max_budget to available_balance since no purchases were made
+            user.available_balance += ctx.max_budget
+            session.add(user)
+            session.commit()
         
-        return purchased
+        return inspection.purchased
         
     except Exception as e:
         # Log the error
         log_function_error(celery_logger, "inspect_task", e, {
-            "context_id": context_id,
-            "buyer_id": buyer_id,
+            "inspection_id": inspection_id,
             "depth": depth,
             "breadth": breadth,
             "task_id": self.request.id if hasattr(self.request, 'id') else 'unknown'

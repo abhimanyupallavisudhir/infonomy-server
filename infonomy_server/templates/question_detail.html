@@ -130,12 +130,21 @@ function startInspection(questionId) {
     inspectBtn.textContent = 'Starting Inspection...';
     statusDiv.classList.remove('hidden');
     
+    // Get all answer IDs for this question
+    const answerIds = Array.from(document.querySelectorAll('.answer-item')).map(item => 
+        parseInt(item.dataset.answerId)
+    );
+    
     // Start the inspection
     fetch(`/api/questions/${questionId}/inspect`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({
+            decision_context_id: questionId,
+            info_offer_ids: answerIds
+        })
     })
     .then(response => response.json())
     .then(data => {

@@ -1,9 +1,7 @@
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
 from fastapi_users import schemas
 from sqlmodel import SQLModel, Field
-import uuid
 from infonomy_server.models import LLMBuyerType
 
 class UserRead(schemas.BaseUser[int]):
@@ -13,6 +11,7 @@ class UserRead(schemas.BaseUser[int]):
     balance: float
     available_balance: float
     daily_bonus_amount: float
+    purchased_info_offers: List[int]
     buyer_profile: Optional["HumanBuyerRead"]
     seller_profile: Optional["HumanSellerRead"]
     bot_sellers: Optional[List["BotSellerRead"]]
@@ -204,5 +203,23 @@ class InfoOfferUpdate(SQLModel):
     private_info: Optional[str] = None
     public_info: Optional[str] = None
     price: Optional[float] = None
+
+class InspectionRead(SQLModel):
+    id: int
+    decision_context_id: int
+    buyer_id: int
+    child_context_id: Optional[int]
+    purchased: List[int]
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class InspectionCreate(SQLModel):
+    decision_context_id: int
+    info_offer_ids: List[int] = Field(description="List of InfoOffer IDs to inspect")
+
+class InspectionUpdate(SQLModel):
+    purchased: Optional[List[int]] = None
 
 DecisionContextRead.update_forward_refs()

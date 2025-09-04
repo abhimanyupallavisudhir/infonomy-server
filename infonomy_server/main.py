@@ -173,15 +173,16 @@ def get_current_user_purchases(
         )
     
     # Get all purchased info offers for the current user
-    purchased_offers = db.exec(
-        select(InfoOffer)
-        .join(DecisionContext, InfoOffer.context_id == DecisionContext.id)
-        .where(DecisionContext.buyer_id == current_user.id)
-        .where(InfoOffer.purchased == True)
-        .order_by(InfoOffer.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    ).all()
+    if not current_user.purchased_info_offers:
+        purchased_offers = []
+    else:
+        purchased_offers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.id.in_(current_user.purchased_info_offers))
+            .order_by(InfoOffer.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        ).all()
     
     return {
         "purchases": [
@@ -224,11 +225,18 @@ def get_current_user_sales(
     # Collect all sold offers from both HumanSeller and BotSellers
     sold_offers = []
     
+    # Get all users to find purchased offers
+    all_users = db.exec(select(User)).all()
+    all_purchased_offer_ids = set()
+    for user in all_users:
+        if user.purchased_info_offers:
+            all_purchased_offer_ids.update(user.purchased_info_offers)
+    
     if human_seller:
         human_sales = db.exec(
             select(InfoOffer)
             .where(InfoOffer.human_seller_id == human_seller.id)
-            .where(InfoOffer.purchased == True)
+            .where(InfoOffer.id.in_(all_purchased_offer_ids))
             .order_by(InfoOffer.created_at.desc())
         ).all()
         sold_offers.extend(human_sales)
@@ -238,7 +246,7 @@ def get_current_user_sales(
         bot_sales = db.exec(
             select(InfoOffer)
             .where(InfoOffer.bot_seller_id.in_(bot_seller_ids))
-            .where(InfoOffer.purchased == True)
+            .where(InfoOffer.id.in_(all_purchased_offer_ids))
             .order_by(InfoOffer.created_at.desc())
         ).all()
         sold_offers.extend(bot_sales)
@@ -283,12 +291,10 @@ def get_transactions(
     
     # Get purchases
     purchases = []
-    if current_user.buyer_profile:
+    if current_user.buyer_profile and current_user.purchased_info_offers:
         purchased_offers = db.exec(
             select(InfoOffer)
-            .join(DecisionContext, InfoOffer.context_id == DecisionContext.id)
-            .where(DecisionContext.buyer_id == current_user.id)
-            .where(InfoOffer.purchased == True)
+            .where(InfoOffer.id.in_(current_user.purchased_info_offers))
             .order_by(InfoOffer.created_at.desc())
         ).all()
         
@@ -312,11 +318,18 @@ def get_transactions(
     if current_user.seller_profile or current_user.bot_sellers:
         sold_offers = []
         
+        # Get all users to find purchased offers
+        all_users = db.exec(select(User)).all()
+        all_purchased_offer_ids = set()
+        for user in all_users:
+            if user.purchased_info_offers:
+                all_purchased_offer_ids.update(user.purchased_info_offers)
+        
         if current_user.seller_profile:
             human_sales = db.exec(
                 select(InfoOffer)
                 .where(InfoOffer.human_seller_id == current_user.seller_profile.id)
-                .where(InfoOffer.purchased == True)
+                .where(InfoOffer.id.in_(all_purchased_offer_ids))
                 .order_by(InfoOffer.created_at.desc())
             ).all()
             sold_offers.extend(human_sales)
@@ -326,7 +339,7 @@ def get_transactions(
             bot_sales = db.exec(
                 select(InfoOffer)
                 .where(InfoOffer.bot_seller_id.in_(bot_seller_ids))
-                .where(InfoOffer.purchased == True)
+                .where(InfoOffer.id.in_(all_purchased_offer_ids))
                 .order_by(InfoOffer.created_at.desc())
             ).all()
             sold_offers.extend(bot_sales)

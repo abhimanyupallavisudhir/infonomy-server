@@ -3,8 +3,8 @@ from sqlmodel import SQLModel, Field, Relationship, Session, select
 from sqlalchemy import Column, JSON, String, CheckConstraint, Table, ForeignKey #, Computed, Float, case
 # from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlmodel import SQLModelBaseUserDB
-from typing import Optional, List, Literal
-from pydantic import ConfigDict, BaseModel, model_validator
+from typing import Optional, List
+from pydantic import ConfigDict, BaseModel
 import datetime
 
 # Association table for the many-to-many relationship between recursive DecisionContexts and their parent InfoOffers
@@ -12,6 +12,14 @@ decision_context_parent_offers = Table(
     'decision_context_parent_offers',
     SQLModel.metadata,
     Column('decision_context_id', ForeignKey('decisioncontext.id'), primary_key=True),
+    Column('info_offer_id', ForeignKey('infooffer.id'), primary_key=True)
+)
+
+# Association table for the many-to-many relationship between Inspections and InfoOffers
+inspection_info_offers = Table(
+    'inspection_info_offers',
+    SQLModel.metadata,
+    Column('inspection_id', ForeignKey('inspection.id'), primary_key=True),
     Column('info_offer_id', ForeignKey('infooffer.id'), primary_key=True)
 )
 
@@ -30,6 +38,7 @@ class User(SQLModelBaseUserDB, table=True):
     last_login_date: Optional[datetime.date] = Field(default=None, description="Last date the user logged in")
     daily_bonus_amount: float = Field(default=10.0, description="Amount of money given as daily login bonus")
     api_keys: dict = Field(default_factory=dict, sa_column=Column(JSON), description="User's API keys for LLM services")
+    purchased_info_offers: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that this user has purchased")
 
     # Relationships
     buyer_profile: Optional["HumanBuyer"] = Relationship(
@@ -39,6 +48,7 @@ class User(SQLModelBaseUserDB, table=True):
         back_populates="user", sa_relationship_kwargs={"uselist": False}
     )
     bot_sellers: List["BotSeller"] = Relationship(back_populates="user")
+    inspections: List["Inspection"] = Relationship(back_populates="buyer")
 
 
 class LLMBuyerType(BaseModel):
@@ -372,6 +382,14 @@ class DecisionContext(SQLModel, table=True):
     # Relationships
     buyer: HumanBuyer = Relationship(back_populates="decision_contexts")
     info_offers: List["InfoOffer"] = Relationship(back_populates="context")
+    inspections: List["Inspection"] = Relationship(
+        back_populates="decision_context",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.decision_context_id]"}
+    )
+    parent_inspection: Optional["Inspection"] = Relationship(
+        back_populates="child_context",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.child_context_id]"}
+    )
 
     # @property
     # def info_offers_being_inspected(self) -> list["InfoOffer"]:
@@ -424,23 +442,18 @@ class InfoOffer(SQLModel, table=True):
     )
     price: float = Field(default=0.0, index=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
-    # currently_being_inspected: bool = Field(
-    #     default=False,
-    #     description="Whether the info offer is currently being inspected by a buyer",
-    # )
-    inspected: bool = Field(
-        default=False,
-        description="Whether the info offer has been inspected by a buyer",
-    )
-    purchased: bool = Field(
-        default=False,
-        description="Whether the info offer has been purchased by a buyer",
-    )
 
     # Relationships
     context: DecisionContext = Relationship(back_populates="info_offers")
     human_seller: Optional["HumanSeller"] = Relationship(back_populates="info_offers")
     bot_seller: Optional["BotSeller"] = Relationship(back_populates="info_offers")
+    inspections: List["Inspection"] = Relationship(
+        back_populates="info_offers",
+        sa_relationship_kwargs={
+            "secondary": inspection_info_offers,
+            "overlaps": "info_offers"
+        }
+    )
 
     parent_contexts: List[DecisionContext] = Relationship(
         back_populates="parent_offers",
@@ -483,3 +496,31 @@ class MatcherInbox(SQLModel, table=True):
     # Relationships
     matcher: SellerMatcher = Relationship(back_populates="inbox_items")
     decision_context: DecisionContext = Relationship()
+
+
+class Inspection(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    decision_context_id: int = Field(foreign_key="decisioncontext.id", index=True)
+    buyer_id: int = Field(foreign_key="user.id", index=True)
+    child_context_id: Optional[int] = Field(foreign_key="decisioncontext.id", index=True, default=None)
+    purchased: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased in this inspection")
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow, index=True)
+
+    # Relationships
+    decision_context: DecisionContext = Relationship(
+        back_populates="inspections",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.decision_context_id]"}
+    )
+    buyer: User = Relationship(back_populates="inspections")
+    child_context: Optional[DecisionContext] = Relationship(
+        back_populates="parent_inspection",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.child_context_id]"}
+    )
+    info_offers: List["InfoOffer"] = Relationship(
+        back_populates="inspections",
+        sa_relationship_kwargs={
+            "secondary": inspection_info_offers,
+            "lazy": "selectin",
+            "overlaps": "inspections"
+        }
+    )

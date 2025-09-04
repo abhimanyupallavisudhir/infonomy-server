@@ -420,9 +420,38 @@ async def inspect_answer(
     db: Session = Depends(get_db),
     current_user: User = Depends(current_active_user)
 ):
-    """Handle answer inspection"""
-    # This would integrate with your existing inspection logic
-    # For now, just redirect back to the question
+    """Handle answer inspection using new Inspection system"""
+    from infonomy_server.models import Inspection
+    from infonomy_server.schemas import InspectionCreate
+    from infonomy_server.tasks import inspect_task
+    
+    # Create inspection for the specific answer
+    inspection_data = InspectionCreate(
+        decision_context_id=question_id,
+        info_offer_ids=[answer_id]
+    )
+    
+    # Create the inspection
+    inspection = Inspection(
+        decision_context_id=question_id,
+        buyer_id=current_user.id,
+        created_at=datetime.utcnow()
+    )
+    db.add(inspection)
+    db.commit()
+    db.refresh(inspection)
+
+    # Associate the InfoOffer with this inspection
+    from infonomy_server.models import InfoOffer
+    offer = db.get(InfoOffer, answer_id)
+    if offer:
+        inspection.info_offers.append(offer)
+        db.add(inspection)
+        db.commit()
+
+    # Start the inspection task
+    inspect_task.delay(inspection.id)
+    
     return RedirectResponse(url=f"/questions/{question_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 # Profile management endpoints
