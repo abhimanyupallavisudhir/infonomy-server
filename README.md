@@ -37,6 +37,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
 - [ ] make sure matcher logic is correct
+- [ ] allow non-default child LLM buyer
 
 ### inspection improvements
 - [ ] **recursive answers on answers not bought should not be shown, even if bought**

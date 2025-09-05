@@ -504,6 +504,9 @@ class Inspection(SQLModel, table=True):
     buyer_id: int = Field(foreign_key="user.id", index=True)
     child_context_id: Optional[int] = Field(foreign_key="decisioncontext.id", index=True, default=None)
     purchased: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased in this inspection")
+    known_offers: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that are already known/purchased")
+    elder_brother_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
+    younger_brother_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
     job_id: Optional[str] = Field(default=None, index=True, description="Celery task ID for tracking inspection progress")
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow, index=True)
 
@@ -524,4 +527,12 @@ class Inspection(SQLModel, table=True):
             "lazy": "selectin",
             "overlaps": "inspections"
         }
+    )
+    elder_brother: Optional["Inspection"] = Relationship(
+        back_populates="younger_brother",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.elder_brother_id]"}
+    )
+    younger_brother: Optional["Inspection"] = Relationship(
+        back_populates="elder_brother",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.younger_brother_id]"}
     )

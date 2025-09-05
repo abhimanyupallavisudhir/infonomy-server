@@ -339,12 +339,13 @@ def inspect_task(
     max_breadth=3,
 ) -> List[int]:
     """
-    New inspection system using Inspection model:
-    1) Load the inspection and its associated InfoOffers
-    2) Call LLM to choose offers or ask for a child context
-    3) If offers chosen: record them in inspection.purchased and user.purchased_info_offers
-    4) If child context requested: create it, recompute inbox, wait for offers, recurse
-    5) When done: return full list of purchased offer IDs
+    Inspection system with child/brother inspection pattern:
+    1) Load inspection and its InfoOffers
+    2) Call LLM with inspection attributes and known_info=[]
+    3) If LLM chooses offers: return them and update inspection.purchased and user.purchased_info_offers
+    4) If LLM creates child context: create child inspection, wait for offers, recurse
+    5) Create younger brother inspection with expanded known_offers and breadth+1
+    6) Return whatever the brother inspection returns
     """
     
     # Log task start
@@ -354,7 +355,7 @@ def inspect_task(
         "depth": depth,
         "breadth": breadth,
         "max_depth": max_depth,
-        "max_breadth": max_breadth
+        "max_breadth": max_breadth,
     })
     
     session = Session(engine)
@@ -372,8 +373,8 @@ def inspect_task(
                         user.available_balance += ctx.max_budget
                         session.add(user)
                         session.commit()
-            
-            return inspection.purchased if inspection else []
+                    return inspection.purchased
+            return []
 
         # Load inspection and related data
         inspection = session.get(Inspection, inspection_id)
@@ -404,18 +405,11 @@ def inspect_task(
             
             return inspection.purchased
 
-        # Get previously purchased offers for the LLM context
-        known_info: List[InfoOffer] = []
-        for offer_id in user.purchased_info_offers:
-            off = session.get(InfoOffer, offer_id)
-            if off:
-                known_info.append(off)
-
-        # 2) Invoke LLM with full, private offer data
+        # 2) Call LLM with inspection attributes and known_info=[]
         chosen_ids, child_ctx = call_llm(
             context=ctx, 
             offers=offers, 
-            known_info=known_info, 
+            known_info=[],  # Always empty as per specification
             buyer=LLMBuyerType(**buyer.default_child_llm),
             user=user
         )
@@ -454,14 +448,8 @@ def inspect_task(
             session.add(inspection)
             session.commit()
             
-            # recurse on the same inspection
-            return inspect_task(
-                inspection_id=inspection_id,
-                depth=depth,
-                breadth=breadth + 1,
-                max_depth=max_depth,
-                max_breadth=max_breadth,
-            )
+            # Return the chosen offers
+            return chosen_ids
 
         # 3b) If LLM returned an empty list *but* wants more info
         if child_ctx:
@@ -470,17 +458,7 @@ def inspect_task(
             session.commit()
             session.refresh(child_ctx)
 
-            # Create a new Inspection for the child context
-            child_inspection = Inspection(
-                decision_context_id=child_ctx.id,
-                buyer_id=inspection.buyer_id,
-                created_at=datetime.utcnow()
-            )
-            session.add(child_inspection)
-            session.commit()
-            session.refresh(child_inspection)
-
-            # Update the parent inspection to reference the child context
+            # Update the current inspection to reference the child context
             inspection.child_context_id = child_ctx.id
             session.add(inspection)
 
@@ -529,13 +507,68 @@ def inspect_task(
                 else:
                     time.sleep(BOTSELLER_POLL_INTERVAL_SLOW)  # Check every 3 seconds for human sellers
             
-            # recurse into the child inspection
-            return inspect_task(
+            # Create a child inspection for the child context
+            child_inspection = Inspection(
+                decision_context_id=child_ctx.id,
+                buyer_id=inspection.buyer_id,
+                known_offers=inspection.known_offers.copy(),  # Inherit known_offers
+                created_at=datetime.utcnow()
+            )
+            session.add(child_inspection)
+            session.commit()
+            session.refresh(child_inspection)
+
+            # Associate all InfoOffers from the child context with the child inspection
+            child_offers = session.exec(
+                select(InfoOffer).where(InfoOffer.context_id == child_ctx.id)
+            ).all()
+            for offer in child_offers:
+                child_inspection.info_offers.append(offer)
+            session.add(child_inspection)
+            session.commit()
+            
+            # Recurse into the child inspection with depth+1
+            child_purchased = inspect_task(
                 inspection_id=child_inspection.id,
                 depth=depth + 1,
                 breadth=breadth,
                 max_depth=max_depth,
-                max_breadth=max_breadth,
+                max_breadth=max_breadth
+            )
+            
+            # Append child purchases to current purchased list (but don't process them)
+            current_purchased = inspection.purchased + child_purchased
+            
+            # Create younger brother inspection with expanded known_offers and breadth+1
+            brother_inspection = Inspection(
+                decision_context_id=ctx.id,
+                buyer_id=inspection.buyer_id,
+                known_offers=inspection.known_offers + current_purchased,  # Expand known_offers
+                elder_brother_id=inspection.id,
+                created_at=datetime.utcnow()
+            )
+            session.add(brother_inspection)
+            session.commit()
+            session.refresh(brother_inspection)
+
+            # Associate the same InfoOffers with the brother inspection
+            for offer in offers:
+                brother_inspection.info_offers.append(offer)
+            session.add(brother_inspection)
+            session.commit()
+
+            # Update the current inspection to reference its younger brother
+            inspection.younger_brother_id = brother_inspection.id
+            session.add(inspection)
+            session.commit()
+            
+            # Recurse into the brother inspection with breadth+1
+            return inspect_task(
+                inspection_id=brother_inspection.id,
+                depth=depth,
+                breadth=breadth + 1,
+                max_depth=max_depth,
+                max_breadth=max_breadth
             )
 
         # 4) Nothing to buy and no child → we're done
