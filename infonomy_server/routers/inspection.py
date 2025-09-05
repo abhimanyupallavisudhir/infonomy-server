@@ -32,10 +32,6 @@ def create_inspection(
         "info_offer_ids": inspection_data.info_offer_ids
     })
     
-    # Validate that context_id matches inspection_data.decision_context_id
-    if context_id != inspection_data.decision_context_id:
-        raise HTTPException(status_code=400, detail="context_id in URL must match decision_context_id in request body")
-    
     # ensure context exists (no longer restricted to owner)
     ctx = db.get(DecisionContext, context_id)
     if not ctx:
@@ -70,7 +66,6 @@ def create_inspection(
     inspection = Inspection(
         decision_context_id=context_id,
         buyer_id=current_user.id,
-        known_offers=current_user.purchased_info_offers.copy(),  # Initialize with user's purchased offers
         created_at=datetime.utcnow()
     )
     db.add(inspection)

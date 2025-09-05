@@ -504,7 +504,7 @@ class Inspection(SQLModel, table=True):
     buyer_id: int = Field(foreign_key="user.id", index=True)
     child_context_id: Optional[int] = Field(foreign_key="decisioncontext.id", index=True, default=None)
     purchased: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased in this inspection")
-    known_offers: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that are already known/purchased")
+    known_offers: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that are known to this inspection (from previous purchases)")
     elder_brother_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
     younger_brother_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
     job_id: Optional[str] = Field(default=None, index=True, description="Celery task ID for tracking inspection progress")

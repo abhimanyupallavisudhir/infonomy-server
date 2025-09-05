@@ -337,9 +337,10 @@ def inspect_task(
     breadth=0,
     max_depth=3,
     max_breadth=3,
+    known_offers: Optional[List[int]] = None,
 ) -> List[int]:
     """
-    Inspection system with child/brother inspection pattern:
+    Brother inspection pattern:
     1) Load inspection and its InfoOffers
     2) Call LLM with inspection attributes and known_info=[]
     3) If LLM chooses offers: return them and update inspection.purchased and user.purchased_info_offers
@@ -356,6 +357,7 @@ def inspect_task(
         "breadth": breadth,
         "max_depth": max_depth,
         "max_breadth": max_breadth,
+        "purchased": known_offers
     })
     
     session = Session(engine)
@@ -374,7 +376,7 @@ def inspect_task(
                         session.add(user)
                         session.commit()
                     return inspection.purchased
-            return []
+            return known_offers or []
 
         # Load inspection and related data
         inspection = session.get(Inspection, inspection_id)
@@ -382,7 +384,7 @@ def inspect_task(
             log_business_event(celery_logger, "inspection_not_found", parameters={
                 "inspection_id": inspection_id
             })
-            return []
+            return known_offers or []
 
         ctx = inspection.decision_context
         buyer = session.get(HumanBuyer, inspection.buyer_id)

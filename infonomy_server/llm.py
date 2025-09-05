@@ -142,7 +142,7 @@ def call_llm(
     offers: List[InfoOffer],
     known_info: List[InfoOffer],
     buyer: LLMBuyerType,
-    user: Optional["User"] = None,
+    user: User, # Optional["User"] = None,
 ) -> Tuple[List[int], Optional["DecisionContext"]]:
     # Log function entry
     log_function_call(llm_logger, "call_llm", {
@@ -178,8 +178,8 @@ def call_llm(
     accept = False
     available_ids = set(io.id for io in offers)
 
-    # Use user's API keys if available, otherwise fall back to server defaults
-    api_keys = user.api_keys if user and user.api_keys else {}
+    # Use user's API keys. NEED user api keys.
+    api_keys = user.api_keys # if user and user.api_keys else {}
 
     # Import the context manager
     from infonomy_server.utils import temporary_api_keys
