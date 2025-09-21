@@ -38,6 +38,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
 - [ ] make sure matcher logic is correct
 - [ ] allow non-default child LLM buyer
+- [ ] add a proper max_breadth logic -- you don't want LLMs asking questions forever; if breadth exceeds then force it to only return IDs
 
 ### inspection improvements
 - [ ] **recursive answers on answers not bought should not be shown, even if bought**

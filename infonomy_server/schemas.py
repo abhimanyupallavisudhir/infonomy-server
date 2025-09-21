@@ -210,9 +210,11 @@ class InspectionRead(SQLModel):
     buyer_id: int
     child_context_id: Optional[int]
     purchased: List[int]
-    known_offers: List[int]
-    elder_brother_id: Optional[int]
-    younger_brother_id: Optional[int]
+    known_info: List[int]
+    parent_id: Optional[int]
+    informed_repeat_of: Optional[int]
+    depth: int
+    breadth: int
     job_id: Optional[str]
     created_at: datetime
 

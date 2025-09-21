@@ -66,6 +66,9 @@ def create_inspection(
     inspection = Inspection(
         decision_context_id=context_id,
         buyer_id=current_user.id,
+        known_info=[],  # Start with empty known_info
+        depth=0,        # Start at depth 0
+        breadth=0,      # Start at breadth 0
         created_at=datetime.utcnow()
     )
     db.add(inspection)

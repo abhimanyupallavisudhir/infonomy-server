@@ -504,9 +504,11 @@ class Inspection(SQLModel, table=True):
     buyer_id: int = Field(foreign_key="user.id", index=True)
     child_context_id: Optional[int] = Field(foreign_key="decisioncontext.id", index=True, default=None)
     purchased: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased in this inspection")
-    known_offers: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that are known to this inspection (from previous purchases)")
-    elder_brother_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
-    younger_brother_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
+    known_info: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased by parent or elder-brother inspections")
+    parent_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
+    informed_repeat_of: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
+    depth: int = Field(default=0, index=True)
+    breadth: int = Field(default=0, index=True)
     job_id: Optional[str] = Field(default=None, index=True, description="Celery task ID for tracking inspection progress")
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow, index=True)
 
@@ -528,11 +530,19 @@ class Inspection(SQLModel, table=True):
             "overlaps": "inspections"
         }
     )
-    elder_brother: Optional["Inspection"] = Relationship(
-        back_populates="younger_brother",
-        sa_relationship_kwargs={"foreign_keys": "[Inspection.elder_brother_id]"}
+    parent: Optional["Inspection"] = Relationship(
+        back_populates="children",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.parent_id]"}
     )
-    younger_brother: Optional["Inspection"] = Relationship(
-        back_populates="elder_brother",
-        sa_relationship_kwargs={"foreign_keys": "[Inspection.younger_brother_id]"}
+    children: List["Inspection"] = Relationship(
+        back_populates="parent",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.parent_id]"}
+    )
+    informed_repeat_of_inspection: Optional["Inspection"] = Relationship(
+        back_populates="informed_repeats",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.informed_repeat_of]"}
+    )
+    informed_repeats: List["Inspection"] = Relationship(
+        back_populates="informed_repeat_of_inspection",
+        sa_relationship_kwargs={"foreign_keys": "[Inspection.informed_repeat_of]"}
     )
