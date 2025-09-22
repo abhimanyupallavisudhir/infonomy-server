@@ -413,15 +413,12 @@ def inspect_task(
                 if offer_id not in user.purchased_info_offers:
                     user.purchased_info_offers.append(offer_id)
             
-            # Update total_purchased for this inspection
-            inspection.total_purchased = inspection.calculate_total_purchased(session)
-            
             # Increment the buyer's purchased counter for this priority level
             if depth == 0 and breadth == 0:
                 increment_buyer_purchased_counter(buyer, ctx.priority, session)
                 
                 # Handle balance logic for top-level contexts only
-                # Calculate cost of ALL purchases in this inspection tree
+                # Calculate cost of ALL purchases in this inspection tree using computed property
                 total_purchased_offers = session.exec(
                     select(InfoOffer).where(InfoOffer.id.in_(inspection.total_purchased))
                 ).all()
@@ -518,12 +515,6 @@ def inspect_task(
                 max_depth=max_depth
             )
 
-            # Update child inspection's total_purchased after it completes
-            child_inspection = session.get(Inspection, child_inspection.id)
-            child_inspection.total_purchased = child_inspection.calculate_total_purchased(session)
-            session.add(child_inspection)
-            session.commit()
-
             # 3) Create "informed" inspection at same level, with this new info
             informed_reinspection = Inspection(
                 decision_context_id=ctx.id,
@@ -549,12 +540,6 @@ def inspect_task(
                 inspection_id=informed_reinspection.id,
                 max_depth=max_depth
             )
-
-            # Update reinspection's total_purchased after it completes
-            informed_reinspection = session.get(Inspection, informed_reinspection.id)
-            informed_reinspection.total_purchased = informed_reinspection.calculate_total_purchased(session)
-            session.add(informed_reinspection)
-            session.commit()
             
             return reinspection_offers
 
