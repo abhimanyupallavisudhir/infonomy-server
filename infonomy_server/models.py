@@ -504,6 +504,7 @@ class Inspection(SQLModel, table=True):
     buyer_id: int = Field(foreign_key="user.id", index=True)
     child_context_id: Optional[int] = Field(foreign_key="decisioncontext.id", index=True, default=None)
     purchased: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased in this inspection")
+    total_purchased: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of all InfoOffer IDs purchased in this inspection tree (this inspection + reinspections + children)")
     known_info: List[int] = Field(default_factory=list, sa_column=Column(JSON), description="List of InfoOffer IDs that were purchased by parent or elder-brother inspections")
     parent_id: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
     informed_repeat_of: Optional[int] = Field(foreign_key="inspection.id", index=True, default=None)
@@ -546,3 +547,25 @@ class Inspection(SQLModel, table=True):
         back_populates="informed_repeat_of_inspection",
         sa_relationship_kwargs={"foreign_keys": "[Inspection.informed_repeat_of]"}
     )
+
+    def calculate_total_purchased(self, session: Session) -> List[int]:
+        """
+        Calculate total_purchased by combining:
+        1. This inspection's purchased offers
+        2. Total purchased from the inspection this is a reinspection of (if any)
+        3. Total purchased from all child inspections
+        """
+        total = set(self.purchased)
+        
+        # Add from the inspection this is a reinspection of
+        if self.informed_repeat_of:
+            parent_inspection = session.get(Inspection, self.informed_repeat_of)
+            if parent_inspection and parent_inspection.total_purchased:
+                total.update(parent_inspection.total_purchased)
+        
+        # Add from all child inspections
+        for child in self.children:
+            if child.total_purchased:
+                total.update(child.total_purchased)
+        
+        return list(total)

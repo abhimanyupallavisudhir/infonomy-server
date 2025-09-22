@@ -379,17 +379,14 @@ def inspect_task(
             # If this is a top-level inspection and we're hitting limits, restore the max_budget to available_balance
             if depth == 0:
                 user.available_balance += ctx.max_budget
+                inspection.purchased = []
                 session.add(inspection)
                 session.add(user)
                 session.commit()
             return []
 
         # Get the corresponding InfoOffers to known_info_ids
-        known_info: List[InfoOffer] = []
-        for offer_id in known_info_ids:
-            off = session.get(InfoOffer, offer_id)
-            if off:
-                known_info.append(off)
+        known_info: List[InfoOffer] = [session.get(InfoOffer, offer_id) for offer_id in known_info_ids]
 
         # Call LLM with inspection attributes and known_info
         chosen_ids, child_ctx = call_llm(
@@ -403,7 +400,7 @@ def inspect_task(
         # Increment the buyer's inspected counter for this priority level
         # Only increment once per context, not per offer
         # AND only for the original context (depth=0), not recursive child contexts
-        if depth == 0:
+        if depth == 0 and breadth == 0:
             increment_buyer_inspected_counter(buyer, ctx.priority, session)
 
         # If LLM decides to buy some offers
@@ -411,17 +408,24 @@ def inspect_task(
             # Add those to the .purchased of the current inspection
             inspection.purchased.extend(chosen_ids)
             
-            # Update the buyer's owned offers, balances etc.
+            # Update the buyer's owned offers
             for offer_id in chosen_ids:
                 if offer_id not in user.purchased_info_offers:
                     user.purchased_info_offers.append(offer_id)
             
+            # Update total_purchased for this inspection
+            inspection.total_purchased = inspection.calculate_total_purchased(session)
+            
             # Increment the buyer's purchased counter for this priority level
-            if depth == 0:
+            if depth == 0 and breadth == 0:
                 increment_buyer_purchased_counter(buyer, ctx.priority, session)
                 
                 # Handle balance logic for top-level contexts only
-                total_cost = sum(off.price for off in offers if off.id in chosen_ids)
+                # Calculate cost of ALL purchases in this inspection tree
+                total_purchased_offers = session.exec(
+                    select(InfoOffer).where(InfoOffer.id.in_(inspection.total_purchased))
+                ).all()
+                total_cost = sum(off.price for off in total_purchased_offers)
                 user.balance -= total_cost
                 user.available_balance += ctx.max_budget
                 session.add(user)
@@ -514,6 +518,12 @@ def inspect_task(
                 max_depth=max_depth
             )
 
+            # Update child inspection's total_purchased after it completes
+            child_inspection = session.get(Inspection, child_inspection.id)
+            child_inspection.total_purchased = child_inspection.calculate_total_purchased(session)
+            session.add(child_inspection)
+            session.commit()
+
             # 3) Create "informed" inspection at same level, with this new info
             informed_reinspection = Inspection(
                 decision_context_id=ctx.id,
@@ -539,10 +549,16 @@ def inspect_task(
                 inspection_id=informed_reinspection.id,
                 max_depth=max_depth
             )
+
+            # Update reinspection's total_purchased after it completes
+            informed_reinspection = session.get(Inspection, informed_reinspection.id)
+            informed_reinspection.total_purchased = informed_reinspection.calculate_total_purchased(session)
+            session.add(informed_reinspection)
+            session.commit()
             
             return reinspection_offers
 
-        # Nothing to buy and no child → we're done
+        # If neither child_ctx nor chosen_ids, we're done and can return []
         # If this is a top-level inspection and we're done, restore the max_budget to available_balance
         if depth == 0:
             user.available_balance += ctx.max_budget
