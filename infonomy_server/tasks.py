@@ -479,8 +479,18 @@ def inspect_task(
                     select(InfoOffer).where(InfoOffer.id.in_(inspection.total_purchased))
                 ).all()
                 total_cost = sum(off.price for off in total_purchased_offers)
+                log_business_event(celery_logger, "inspection_total_purchased_offers", parameters={
+                    "inspection_id": inspection_id,
+                    "ctx": ctx,
+                    "buyer": buyer,
+                    "user": user,
+                    "total_purchased_offers": [off.id for off in total_purchased_offers],
+                    "total_cost": total_cost
+                })
+                print(f"inspection_total_purchased_offers: {inspection_id}, {ctx}, {buyer}, {user}, {inspection.total_purchased}, {total_cost}")
                 user.balance -= total_cost
                 user.available_balance += ctx.max_budget
+                user.available_balance -= total_cost
                 session.add(user)
             
             session.add(inspection)

@@ -34,6 +34,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] make sure rates are correctly counted and maintained
 - [x] let users put their API keys
 - [x] balances
+- [x] balance logic doesn't seem correct -- check line 480 of tasks.py
 - [ ] fix the very stupid issue of bot sellers posting stuff every time recompute_inbox is called. We need inbox items to be marked as purchased etc.
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
@@ -54,6 +55,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] UI for adding API keys
 - [x] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
 - [x] matcher deletion, update etc.
+- [ ] better error pages
 
 ### simplificatons made
 - [ ] let DecisionContexts have "title" and "details"

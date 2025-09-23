@@ -23,10 +23,15 @@ with Session(engine) as session:
     ).all()
     print(f"Matchers for {user0.username}: {matchers}")
 
-    # show inbox for matcher id=14
-    inbox = session.exec(
-        select(MatcherInbox).where(MatcherInbox.matcher_id == 14)
+    # show all inspections
+    inspections = session.exec(
+        select(Inspection).where(Inspection.buyer_id == user0.id)
     ).all()
-    print(f"Inbox for matcher 14: {inbox}")
-    
-    
+    print(f"Inspections for {user0.username}: {inspections}")
+    print(f"Total purchased for inspection 2: {inspections[0].total_purchased}")
+
+    # view info offer id=5
+    info_offer = session.exec(
+        select(InfoOffer).where(InfoOffer.id == 5)
+    ).first()
+    print(f"Info offer 5: {info_offer}")

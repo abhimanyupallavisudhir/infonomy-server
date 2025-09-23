@@ -70,6 +70,7 @@ def test_balance_logic():
         user.balance -= total_cost
         # Restore the max_budget to available_balance
         user.available_balance += ctx.max_budget
+        user.available_balance -= total_cost
         session.add(user)
         session.commit()
         
