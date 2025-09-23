@@ -106,20 +106,7 @@ def create_inspection_new(
         "max_budget": ctx.max_budget
     })
 
-    return {
-        "id": inspection.id,
-        "job_id": async_result.id,
-        "decision_context_id": inspection.decision_context_id,
-        "buyer_id": inspection.buyer_id,
-        "purchased": inspection.purchased,
-        "known_info": inspection.known_info,
-        "parent_id": inspection.parent_id,
-        "informed_repeat_of": inspection.informed_repeat_of,
-        "informed_repeats_ids": inspection.informed_repeats_ids,
-        "depth": inspection.depth,
-        "breadth": inspection.breadth,
-        "created_at": inspection.created_at
-    }
+    return inspection
 
 
 @router.post(
