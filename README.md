@@ -60,7 +60,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 ### misc infra
 - [x] client library
 - [x] logging=True and better handling of LLM API fails
-- [ ] better logging of full inspection chain
+- [x] better logging of full inspection chain
 - [ ] notifications for InfoOffers received and inspections completed
 - [x] demo notebook
 - [x] demo with a UI maybe

@@ -2,15 +2,14 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Form, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
-from typing import Optional, List
+from typing import List
 from infonomy_server.database import get_db
 from infonomy_server.models import User, DecisionContext, InfoOffer, HumanBuyer, HumanSeller, BotSeller, SellerMatcher, MatcherInbox
-from infonomy_server.schemas import DecisionContextCreateNonRecursive, InfoOfferCreate, HumanBuyerCreate, HumanBuyerUpdate, BotSellerCreate, BotSellerUpdate, SellerMatcherCreate, SellerMatcherUpdate
+from infonomy_server.schemas import DecisionContextCreateNonRecursive, BotSellerCreate, SellerMatcherCreate
 from infonomy_server.auth import current_active_user
 from infonomy_server.auth_helpers import get_current_user_optional
-from infonomy_server.utils import get_context_for_buyer, recompute_inbox_for_context, increment_buyer_query_counter
+from infonomy_server.utils import recompute_inbox_for_context, increment_buyer_query_counter
 from datetime import datetime
-import json
 
 router = APIRouter(tags=["ui"])
 
@@ -53,7 +52,7 @@ async def debug_auth(request: Request, db: Session = Depends(get_db)):
         form_data = await request.form()
         auth_token = form_data.get("auth_token")
         print(f"Auth token from form: {auth_token[:20] if auth_token else 'None'}...")
-    except:
+    except Exception:
         print("No form data")
     
     return f"""
@@ -422,14 +421,10 @@ async def inspect_answer(
 ):
     """Handle answer inspection using new Inspection system"""
     from infonomy_server.models import Inspection
-    from infonomy_server.schemas import InspectionCreate
     from infonomy_server.tasks import inspect_task
     
     # Create inspection for the specific answer
-    inspection_data = InspectionCreate(
-        decision_context_id=question_id,
-        info_offer_ids=[answer_id]
-    )
+    # Note: we directly create the Inspection row below and associate the offer
     
     # Create the inspection
     inspection = Inspection(
@@ -483,9 +478,7 @@ async def create_buyer_profile(
     )
     llm_buyer_dict = llm_buyer.dict()
     
-    buyer_data = HumanBuyerCreate(
-        default_child_llm=llm_buyer_dict
-    )
+    # Persist/update buyer profile below
     
     if current_user.buyer_profile:
         # Update existing profile
@@ -666,6 +659,66 @@ async def create_bot_matcher(
     
     return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
 
+
+@router.post("/profile/bot-seller/{bot_seller_id}/delete", response_class=HTMLResponse)
+async def delete_bot_seller(
+    bot_seller_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Delete a bot seller and clean up its matchers and inbox items"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
+    bot = db.get(BotSeller, bot_seller_id)
+    if not bot or bot.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Bot seller not found")
+    
+    # Remove inbox items for each matcher and delete matchers
+    from infonomy_server.utils import remove_matcher_from_inboxes
+    for matcher in list(bot.matchers or []):
+        remove_matcher_from_inboxes(matcher.id, db)
+        db.delete(matcher)
+    
+    # Finally delete the bot seller
+    db.delete(bot)
+    db.commit()
+    
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/profile/bot-matcher/{matcher_id}/delete", response_class=HTMLResponse)
+async def delete_bot_matcher(
+    matcher_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Delete a matcher for a bot seller and clean up inbox items"""
+    context = await get_user_context(request, db)
+    
+    if not context["user"]:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    current_user = context["user"]
+    
+    matcher = db.get(SellerMatcher, matcher_id)
+    if not matcher or not matcher.bot_seller_id:
+        raise HTTPException(status_code=404, detail="Bot matcher not found")
+    
+    bot = db.get(BotSeller, matcher.bot_seller_id)
+    if not bot or bot.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Bot matcher not found")
+    
+    from infonomy_server.utils import remove_matcher_from_inboxes
+    remove_matcher_from_inboxes(matcher_id, db)
+    db.delete(matcher)
+    db.commit()
+    
+    return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
 
 @router.post("/profile/matcher/{matcher_id}/update", response_class=HTMLResponse)
 async def update_matcher(
