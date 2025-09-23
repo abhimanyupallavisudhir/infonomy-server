@@ -532,7 +532,10 @@ class Inspection(SQLModel, table=True):
     )
     parent: Optional["Inspection"] = Relationship(
         back_populates="children",
-        sa_relationship_kwargs={"foreign_keys": "[Inspection.parent_id]"}
+        sa_relationship_kwargs={
+            "foreign_keys": "[Inspection.parent_id]",
+            "remote_side": "[Inspection.id]"
+        }
     )
     children: List["Inspection"] = Relationship(
         back_populates="parent",
@@ -540,7 +543,10 @@ class Inspection(SQLModel, table=True):
     )
     informed_repeat_of_inspection: Optional["Inspection"] = Relationship(
         back_populates="informed_repeats",
-        sa_relationship_kwargs={"foreign_keys": "[Inspection.informed_repeat_of]"}
+        sa_relationship_kwargs={
+            "foreign_keys": "[Inspection.informed_repeat_of]",
+            "remote_side": "[Inspection.id]"
+        }
     )
     informed_repeats: List["Inspection"] = Relationship(
         back_populates="informed_repeat_of_inspection",
