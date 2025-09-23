@@ -656,6 +656,11 @@ async def create_bot_matcher(
     )
     db.add(matcher)
     db.commit()
+    db.refresh(matcher)
+    
+    # Recompute inbox for this new bot matcher and trigger bot processing
+    from infonomy_server.utils import recompute_inbox_for_matcher
+    recompute_inbox_for_matcher(matcher, db)
     
     return RedirectResponse(url=f"/users/{current_user.id}", status_code=status.HTTP_303_SEE_OTHER)
 
