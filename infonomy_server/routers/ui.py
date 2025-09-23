@@ -549,11 +549,16 @@ async def create_bot_seller(
     
     bot_data = BotSellerCreate(
         info=info if info else None,
-        price=price if price > 0 else None,
+        # For fixed-info bots, keep the numeric price even if it's 0.0; only None when using LLM bots
+        price=price if info else None,
         llm_model=llm_model if llm_model else None,
         llm_prompt=llm_prompt if llm_prompt else None
     )
     
+    # Server-side validation to satisfy DB CHECK constraint
+    if bot_data.info and bot_data.price is None and not (bot_data.llm_model and bot_data.llm_prompt):
+        raise HTTPException(status_code=400, detail="Price is required when creating a fixed-info BotSeller")
+
     bot = BotSeller(
         **bot_data.dict(),
         user_id=current_user.id
