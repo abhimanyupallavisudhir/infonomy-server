@@ -427,13 +427,17 @@ def inspect_task(
                 "chosen_ids": chosen_ids
             })
             print(f"inspection_chosen_ids: {inspection_id}, {ctx}, {buyer}, {user}, {chosen_ids}")
-            # Add those to the .purchased of the current inspection
-            inspection.purchased.extend(chosen_ids)
-            
-            # Update the buyer's owned offers
+            # Add those to the .purchased of the current inspection (reassign JSON list so SQLAlchemy tracks change)
+            current_purchased = (inspection.purchased or []).copy()
+            current_purchased.extend(chosen_ids)
+            inspection.purchased = current_purchased
+
+            # Update the buyer's owned offers (reassign JSON list)
+            current_owned = (user.purchased_info_offers or []).copy()
             for offer_id in chosen_ids:
-                if offer_id not in user.purchased_info_offers:
-                    user.purchased_info_offers.append(offer_id)
+                if offer_id not in current_owned:
+                    current_owned.append(offer_id)
+            user.purchased_info_offers = current_owned
             
             # Increment the buyer's purchased counter for this priority level
             if depth == 0 and breadth == 0:
@@ -458,6 +462,7 @@ def inspect_task(
                 session.add(user)
             
             session.add(inspection)
+            session.add(user)
             session.commit()
             session.refresh(inspection)
             
