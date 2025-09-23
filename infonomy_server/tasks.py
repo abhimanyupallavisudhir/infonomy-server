@@ -183,9 +183,7 @@ def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, 
         private_info=private_info,
         public_info=public_info,
         price=price,
-        created_at=datetime.utcnow(),
-        inspected=False,
-        purchased=False
+        created_at=datetime.utcnow()
     )
 
 
