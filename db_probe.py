@@ -1,7 +1,7 @@
 # example script for probing database for things
 
 from infonomy_server.database import engine
-from infonomy_server.models import User, BotSeller, MatcherInbox, DecisionContext, InfoOffer
+from infonomy_server.models import User, BotSeller, MatcherInbox, DecisionContext, InfoOffer, Inspection
 from sqlmodel import Session, select
 
 # Create a database session
@@ -16,6 +16,10 @@ with Session(engine) as session:
 
     if user0:
         print(f"Found user: {user0.username} (ID: {user0.id})")
+        print(f"Available balance: {user0.available_balance}")
+        print(f"Balance: {user0.balance}")
+        print(f"Purchased info offers: {user0.purchased_info_offers}")
+    
 
         # Get all DecisionContexts posted by this user
         questions = session.exec(
@@ -65,4 +69,8 @@ with Session(engine) as session:
     ).all()
     print(f"Inbox for matcher 4: {inbox}")
 
-    
+    # show all inspections
+    inspections = session.exec(
+        select(Inspection).where(Inspection.buyer_id == user0.id)
+    ).all()
+    print(f"Inspections for {user0.username}: {inspections}")

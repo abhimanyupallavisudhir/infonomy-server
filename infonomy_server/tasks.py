@@ -370,11 +370,27 @@ def inspect_task(
         breadth = inspection.breadth
         
         if not ctx or not buyer or not user:
+            log_business_event(celery_logger, "inspection_not_found", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user
+            })
+            print(f"inspection_not_found: {inspection_id}, {ctx}, {buyer}, {user}")
             return inspection.purchased
 
         # Check depth limit
         if depth > max_depth:
             # If this is a top-level inspection and we're hitting limits, restore the max_budget to available_balance
+            log_business_event(celery_logger, "inspection_depth_limit_reached", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user,
+                "depth": depth,
+                "max_depth": max_depth
+            })
+            print(f"inspection_depth_limit_reached: {inspection_id}, {ctx}, {buyer}, {user}, {depth}, {max_depth}")
             if depth == 0:
                 user.available_balance += ctx.max_budget
                 inspection.purchased = []
@@ -403,6 +419,14 @@ def inspect_task(
 
         # If LLM decides to buy some offers
         if chosen_ids:
+            log_business_event(celery_logger, "inspection_chosen_ids", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user,
+                "chosen_ids": chosen_ids
+            })
+            print(f"inspection_chosen_ids: {inspection_id}, {ctx}, {buyer}, {user}, {chosen_ids}")
             # Add those to the .purchased of the current inspection
             inspection.purchased.extend(chosen_ids)
             
@@ -413,6 +437,14 @@ def inspect_task(
             
             # Increment the buyer's purchased counter for this priority level
             if depth == 0 and breadth == 0:
+                log_business_event(celery_logger, "inspection_purchased_increment", parameters={
+                    "inspection_id": inspection_id,
+                    "ctx": ctx,
+                    "buyer": buyer,
+                    "user": user,
+                    "priority": ctx.priority
+                })
+                print(f"inspection_purchased_increment: {inspection_id}, {ctx}, {buyer}, {user}, {ctx.priority}")
                 increment_buyer_purchased_counter(buyer, ctx.priority, session)
                 
                 # Handle balance logic for top-level contexts only
@@ -433,6 +465,14 @@ def inspect_task(
 
         # If LLM decides to spawn a child context
         if child_ctx:
+            log_business_event(celery_logger, "inspection_child_ctx", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user,
+                "child_ctx_id": child_ctx.id
+            })
+            print(f"inspection_child_ctx: {inspection_id}, {ctx}, {buyer}, {user}, {child_ctx.id}")
             # 1) Create the child context
             session.add(child_ctx)
             session.commit()
@@ -543,11 +583,21 @@ def inspect_task(
 
         # If neither child_ctx nor chosen_ids, we're done and can return []
         # If this is a top-level inspection and we're done, restore the max_budget to available_balance
+        
+        log_business_event(celery_logger, "inspection_none", parameters={
+            "inspection_id": inspection_id,
+            "ctx": ctx,
+            "buyer": buyer,
+            "user": user,
+            "depth": depth,
+            "breadth": breadth,
+            "purchased": inspection.purchased
+        })
+        print(f"inspection_none: {inspection_id}, {ctx}, {buyer}, {user}, {depth}, {breadth}, {inspection.purchased}")
         if depth == 0:
             user.available_balance += ctx.max_budget
             session.add(user)
             session.commit()
-        
         return inspection.purchased
         
     except Exception as e:
