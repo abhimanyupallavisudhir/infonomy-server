@@ -35,6 +35,7 @@ def process_bot_sellers_for_context(self, context_id: int):
     """
     Process all BotSellers that have matchers matching a DecisionContext.
     This task is called when a DecisionContext is submitted to seller inboxes.
+    Only processes "new" inbox items and marks them as "responded" after processing.
     """
     
     # Log task start
@@ -54,23 +55,34 @@ def process_bot_sellers_for_context(self, context_id: int):
             })
             return
         
-        # Find all BotSeller matchers that match this context
-        bot_matchers = session.exec(
-            select(SellerMatcher)
+        # Find all "new" inbox items for this context that belong to BotSeller matchers
+        from infonomy_server.models import MatcherInbox
+        new_inbox_items = session.exec(
+            select(MatcherInbox)
+            .join(SellerMatcher, MatcherInbox.matcher_id == SellerMatcher.id)
+            .where(MatcherInbox.decision_context_id == context_id)
+            .where(MatcherInbox.status == "new")
             .where(SellerMatcher.bot_seller_id.isnot(None))
         ).all()
         
-        # Process each matching BotSeller
+        # Process each "new" inbox item
         processed_count = 0
-        for matcher in bot_matchers:
+        for inbox_item in new_inbox_items:
             try:
-                # Check if this matcher actually matches the context
-                if not _matcher_matches_context(matcher, context, session):
+                # Get the matcher and bot seller
+                matcher = session.get(SellerMatcher, inbox_item.matcher_id)
+                if not matcher or not matcher.bot_seller_id:
                     continue
                 
-                # Get the BotSeller
                 bot_seller = session.get(BotSeller, matcher.bot_seller_id)
                 if not bot_seller:
+                    continue
+                
+                # Double-check that the matcher still matches the context
+                if not _matcher_matches_context(matcher, context, session):
+                    # Mark as ignored if it no longer matches
+                    inbox_item.status = "ignored"
+                    session.add(inbox_item)
                     continue
                 
                 # Generate InfoOffer based on BotSeller type
@@ -79,18 +91,28 @@ def process_bot_sellers_for_context(self, context_id: int):
                     session.add(info_offer)
                     processed_count += 1
                     
+                    # Mark the inbox item as responded
+                    inbox_item.status = "responded"
+                    session.add(inbox_item)
+                    
                     log_business_event(bot_sellers_logger, "bot_seller_offer_created", user_id=bot_seller.user_id, parameters={
                         "bot_seller_id": bot_seller.id,
                         "context_id": context_id,
                         "info_offer_id": info_offer.id,
                         "matcher_id": matcher.id,
+                        "inbox_item_id": inbox_item.id,
                         "offer_price": info_offer.price,
                         "bot_seller_type": "fixed_text" if bot_seller.info else "llm"
                     })
+                else:
+                    # Mark as ignored if no offer was generated
+                    inbox_item.status = "ignored"
+                    session.add(inbox_item)
+                    
             except Exception as e:
-                # Log error but continue processing other bots
-                log_function_error(bot_sellers_logger, "process_bot_seller_matcher", e, {
-                    "matcher_id": matcher.id,
+                # Log error but continue processing other items
+                log_function_error(bot_sellers_logger, "process_bot_seller_inbox_item", e, {
+                    "inbox_item_id": inbox_item.id,
                     "context_id": context_id
                 })
                 continue
@@ -100,7 +122,7 @@ def process_bot_sellers_for_context(self, context_id: int):
             log_business_event(celery_logger, "bot_sellers_processing_complete", parameters={
                 "context_id": context_id,
                 "processed_count": processed_count,
-                "total_matchers": len(bot_matchers)
+                "total_new_items": len(new_inbox_items)
             })
         
     except Exception as e:
