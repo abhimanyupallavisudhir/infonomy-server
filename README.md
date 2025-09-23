@@ -35,7 +35,8 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] let users put their API keys
 - [x] balances
 - [x] balance logic doesn't seem correct -- check line 480 of tasks.py
-- [ ] fix the very stupid issue of bot sellers posting stuff every time recompute_inbox is called. We need inbox items to be marked as purchased etc.
+- [ ] balance logic still has problems + better handling for the case when the user runs an inspection twice
+- [x] fix the very stupid issue of bot sellers posting stuff every time recompute_inbox is called. We need inbox items to be marked as purchased etc.
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
 - [ ] make sure matcher logic is correct
@@ -43,7 +44,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [ ] add a proper max_breadth logic -- you don't want LLMs asking questions forever; if breadth exceeds then force it to only return IDs
 
 ### inspection improvements
-- [ ] **recursive answers on answers not bought should not be shown, even if bought**
+- [ ] figure out way to show recursive answers: **recursive answers on answers not bought should not be shown, even if bought**
 - [ ] way to access previous recursive info offers in an inspection
 - [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
 - [ ] maybe let people other than original buyer also buy info offers
@@ -56,6 +57,7 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
 - [x] matcher deletion, update etc.
 - [ ] better error pages
+- [ ] better UI for adding botsellers -- adding pieces of info will be the primary way that people will interact with the system
 
 ### simplificatons made
 - [ ] let DecisionContexts have "title" and "details"

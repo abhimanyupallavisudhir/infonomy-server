@@ -76,10 +76,11 @@ async def home_page(request: Request, db: Session = Depends(get_db)):
     """Home page with questions list and new question form"""
     context = await get_user_context(request, db)
     
-    # Get recent questions with buyer information
+    # Get recent non-recursive questions with buyer information
     questions = db.exec(
         select(DecisionContext, User)
         .join(User, DecisionContext.buyer_id == User.id)
+        .where(DecisionContext.parent_id.is_(None))  # Only non-recursive contexts
         .order_by(DecisionContext.created_at.desc())
         .limit(50)
     ).all()
@@ -100,10 +101,11 @@ async def questions_page(request: Request, db: Session = Depends(get_db)):
     """Questions listing page"""
     context = await get_user_context(request, db)
     
-    # Get recent questions with buyer information
+    # Get recent non-recursive questions with buyer information
     questions = db.exec(
         select(DecisionContext, User)
         .join(User, DecisionContext.buyer_id == User.id)
+        .where(DecisionContext.parent_id.is_(None))  # Only non-recursive contexts
         .order_by(DecisionContext.created_at.desc())
         .limit(100)
     ).all()
@@ -166,7 +168,8 @@ async def question_detail_page(
         "question": question,
         "info_offers_data": info_offers_data,
         "buyer": buyer,
-        "is_question_owner": context["user"] and context["user"].id == question.buyer_id
+        "is_question_owner": context["user"] and context["user"].id == question.buyer_id,
+        "user": context["user"]  # Pass user to template for purchased offers check
     })
     
     return templates.TemplateResponse("question_detail.html", context)

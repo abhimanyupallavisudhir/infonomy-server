@@ -30,8 +30,8 @@ with Session(engine) as session:
     print(f"Inspections for {user0.username}: {inspections}")
     print(f"Total purchased for inspection 2: {inspections[0].total_purchased}")
 
-    # view info offer id=5
-    info_offer = session.exec(
-        select(InfoOffer).where(InfoOffer.id == 5)
-    ).first()
-    print(f"Info offer 5: {info_offer}")
+    # show all info offers purchased by user0
+    info_offers = session.exec(
+        select(InfoOffer).where(InfoOffer.id.in_(user0.purchased_info_offers))
+    ).all()
+    print(f"Info offers purchased by {user0.username}: {info_offers}")

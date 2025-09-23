@@ -15,6 +15,114 @@ from infonomy_server.logging_config import inspection_logger, log_business_event
 router = APIRouter(tags=["inspection"])
 
 @router.post(
+    "/inspection",
+    response_model=InspectionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_inspection_new(
+    inspection_data: InspectionCreate,
+    db: Session = Depends(get_db),
+    current_user: UserRead = Depends(current_active_user),
+):
+    """Create a new inspection (new API endpoint for UI)"""
+    context_id = inspection_data.decision_context_id
+    
+    # Log inspection start
+    log_business_event(inspection_logger, "inspection_requested", user_id=current_user.id, parameters={
+        "context_id": context_id,
+        "user_id": current_user.id,
+        "info_offer_ids": inspection_data.info_offer_ids
+    })
+    
+    # ensure context exists
+    ctx = db.get(DecisionContext, context_id)
+    if not ctx:
+        log_business_event(inspection_logger, "inspection_failed", user_id=current_user.id, parameters={
+            "context_id": context_id,
+            "error": "context_not_found"
+        })
+        raise HTTPException(status_code=404, detail="Context not found")
+
+    # Validate that the specified InfoOffers exist and belong to this context
+    if inspection_data.info_offer_ids:
+        offers = db.exec(
+            select(InfoOffer)
+            .where(InfoOffer.id.in_(inspection_data.info_offer_ids))
+            .where(InfoOffer.context_id == context_id)
+        ).all()
+        
+        if len(offers) != len(inspection_data.info_offer_ids):
+            log_business_event(inspection_logger, "inspection_failed", user_id=current_user.id, parameters={
+                "context_id": context_id,
+                "error": "invalid_info_offer_ids"
+            })
+            raise HTTPException(status_code=400, detail="Some InfoOffers not found or don't belong to this context")
+    else:
+        # If no specific offers provided, inspect all offers for this context
+        offers = db.exec(
+            select(InfoOffer).where(InfoOffer.context_id == context_id)
+        ).all()
+        inspection_data.info_offer_ids = [offer.id for offer in offers]
+
+    # Create the inspection
+    inspection = Inspection(
+        decision_context_id=context_id,
+        buyer_id=current_user.id,
+        known_info=[],  # Start with empty known_info
+        depth=0,        # Start at depth 0
+        breadth=0,      # Start at breadth 0
+        created_at=datetime.utcnow()
+    )
+    db.add(inspection)
+    db.commit()
+    db.refresh(inspection)
+
+    # Associate the InfoOffers with this inspection
+    for offer_id in inspection_data.info_offer_ids:
+        offer = db.get(InfoOffer, offer_id)
+        if offer:
+            inspection.info_offers.append(offer)
+    
+    db.add(inspection)
+    db.commit()
+    db.refresh(inspection)
+
+    # enqueue the background job
+    async_result = inspect_task.apply_async(
+        args=[inspection.id],
+    )
+    
+    # Set the job_id on the inspection object
+    inspection.job_id = async_result.id
+    db.add(inspection)
+    db.commit()
+    db.refresh(inspection)
+    
+    # Log successful job creation
+    log_business_event(inspection_logger, "inspection_job_created", user_id=current_user.id, parameters={
+        "inspection_id": inspection.id,
+        "context_id": context_id,
+        "job_id": async_result.id,
+        "max_budget": ctx.max_budget
+    })
+
+    return {
+        "id": inspection.id,
+        "job_id": async_result.id,
+        "decision_context_id": inspection.decision_context_id,
+        "buyer_id": inspection.buyer_id,
+        "purchased": inspection.purchased,
+        "known_info": inspection.known_info,
+        "parent_id": inspection.parent_id,
+        "informed_repeat_of": inspection.informed_repeat_of,
+        "informed_repeats_ids": inspection.informed_repeats_ids,
+        "depth": inspection.depth,
+        "breadth": inspection.breadth,
+        "created_at": inspection.created_at
+    }
+
+
+@router.post(
     "/questions/{context_id}/inspect",
     response_model=InspectionRead,
     status_code=status.HTTP_201_CREATED,
@@ -140,6 +248,35 @@ def list_inspections_for_context(
     ).all()
     
     return inspections
+
+
+@router.get("/inspection/{job_id}/status")
+def get_inspection_status(
+    job_id: str,
+    current_user: UserRead = Depends(current_active_user),
+):
+    """Get inspection status by job ID (new endpoint for UI)"""
+    result = AsyncResult(job_id, app=celery)
+    if not result:
+        log_business_event(inspection_logger, "job_status_failed", user_id=current_user.id, parameters={
+            "job_id": job_id,
+            "error": "job_not_found"
+        })
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Log job status check
+    log_business_event(inspection_logger, "job_status_checked", user_id=current_user.id, parameters={
+        "job_id": job_id,
+        "state": result.state,
+        "has_result": result.result is not None,
+        "failed": result.failed()
+    })
+
+    return {
+        "state":  result.state,      # PENDING, STARTED, SUCCESS, FAILURE, ...
+        "result": result.result,     # None until SUCCESS, then your List[int]
+        "traceback": result.traceback if result.failed() else None,
+    }
 
 
 @router.get("/jobs/{job_id}/status")
