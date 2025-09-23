@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 from sqlmodel import Session, select
 
@@ -12,21 +12,21 @@ from infonomy_server.utils import (
     increment_buyer_inspected_counter,
     increment_buyer_purchased_counter
 )
-from infonomy_server.llm import call_llm, completion  # your wrapper around the child‐LLM
+from infonomy_server.llm import call_llm
 from infonomy_server.models import (
     DecisionContext,
     InfoOffer,
     HumanBuyer,
     SellerMatcher,
-    MatcherInbox,
     BotSeller,
     User,
     LLMBuyerType,
+    Inspection,
 )
 from infonomy_server.logging_config import (
-    celery_logger, bot_sellers_logger, inspection_logger, 
-    log_celery_task, log_business_event, log_function_call, 
-    log_function_return, log_function_error, logged_function
+    celery_logger, bot_sellers_logger, 
+    log_celery_task, log_business_event, 
+    log_function_error
 )
 
 
@@ -35,6 +35,7 @@ def process_bot_sellers_for_context(self, context_id: int):
     """
     Process all BotSellers that have matchers matching a DecisionContext.
     This task is called when a DecisionContext is submitted to seller inboxes.
+    Only processes "new" inbox items and marks them as "responded" after processing.
     """
     
     # Log task start
@@ -54,23 +55,34 @@ def process_bot_sellers_for_context(self, context_id: int):
             })
             return
         
-        # Find all BotSeller matchers that match this context
-        bot_matchers = session.exec(
-            select(SellerMatcher)
+        # Find all "new" inbox items for this context that belong to BotSeller matchers
+        from infonomy_server.models import MatcherInbox
+        new_inbox_items = session.exec(
+            select(MatcherInbox)
+            .join(SellerMatcher, MatcherInbox.matcher_id == SellerMatcher.id)
+            .where(MatcherInbox.decision_context_id == context_id)
+            .where(MatcherInbox.status == "new")
             .where(SellerMatcher.bot_seller_id.isnot(None))
         ).all()
         
-        # Process each matching BotSeller
+        # Process each "new" inbox item
         processed_count = 0
-        for matcher in bot_matchers:
+        for inbox_item in new_inbox_items:
             try:
-                # Check if this matcher actually matches the context
-                if not _matcher_matches_context(matcher, context, session):
+                # Get the matcher and bot seller
+                matcher = session.get(SellerMatcher, inbox_item.matcher_id)
+                if not matcher or not matcher.bot_seller_id:
                     continue
                 
-                # Get the BotSeller
                 bot_seller = session.get(BotSeller, matcher.bot_seller_id)
                 if not bot_seller:
+                    continue
+                
+                # Double-check that the matcher still matches the context
+                if not _matcher_matches_context(matcher, context, session):
+                    # Mark as ignored if it no longer matches
+                    inbox_item.status = "ignored"
+                    session.add(inbox_item)
                     continue
                 
                 # Generate InfoOffer based on BotSeller type
@@ -79,18 +91,28 @@ def process_bot_sellers_for_context(self, context_id: int):
                     session.add(info_offer)
                     processed_count += 1
                     
+                    # Mark the inbox item as responded
+                    inbox_item.status = "responded"
+                    session.add(inbox_item)
+                    
                     log_business_event(bot_sellers_logger, "bot_seller_offer_created", user_id=bot_seller.user_id, parameters={
                         "bot_seller_id": bot_seller.id,
                         "context_id": context_id,
                         "info_offer_id": info_offer.id,
                         "matcher_id": matcher.id,
+                        "inbox_item_id": inbox_item.id,
                         "offer_price": info_offer.price,
                         "bot_seller_type": "fixed_text" if bot_seller.info else "llm"
                     })
+                else:
+                    # Mark as ignored if no offer was generated
+                    inbox_item.status = "ignored"
+                    session.add(inbox_item)
+                    
             except Exception as e:
-                # Log error but continue processing other bots
-                log_function_error(bot_sellers_logger, "process_bot_seller_matcher", e, {
-                    "matcher_id": matcher.id,
+                # Log error but continue processing other items
+                log_function_error(bot_sellers_logger, "process_bot_seller_inbox_item", e, {
+                    "inbox_item_id": inbox_item.id,
                     "context_id": context_id
                 })
                 continue
@@ -100,7 +122,7 @@ def process_bot_sellers_for_context(self, context_id: int):
             log_business_event(celery_logger, "bot_sellers_processing_complete", parameters={
                 "context_id": context_id,
                 "processed_count": processed_count,
-                "total_matchers": len(bot_matchers)
+                "total_new_items": len(new_inbox_items)
             })
         
     except Exception as e:
@@ -171,7 +193,7 @@ def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, 
             private_info, public_info, llm_price = _call_bot_seller_llm(bot_seller, context)
             # Use the price returned by the LLM, but ensure it's within budget
             price = min(llm_price, context.max_budget)
-        except Exception as e:
+        except Exception:
             # If LLM call fails, don't create an offer
             return None
     else:
@@ -183,9 +205,7 @@ def _generate_bot_seller_offer(bot_seller: BotSeller, context: DecisionContext, 
         private_info=private_info,
         public_info=public_info,
         price=price,
-        created_at=datetime.utcnow(),
-        inspected=False,
-        purchased=False
+        created_at=datetime.utcnow()
     )
 
 
@@ -332,164 +352,170 @@ Make sure the price is reasonable and within the buyer's budget of {context.max_
 @celery.task(bind=True)
 def inspect_task(
     self,
-    context_id: int,
-    buyer_id: int,
-    purchased: Optional[List[int]] = None,
-    depth=0,
-    breadth=0,
+    inspection_id: int,
     max_depth=3,
-    max_breadth=3,
 ) -> List[int]:
     """
-    1) Load the context & all current InfoOffers
-    2) Call LLM to choose offers or ask for a child context
-    3) If offers chosen: record them, remove from available, recurse
-    4) If child context requested: create it, recompute inbox, wait for offers, recurse
-    5) When done: return full list of purchased offer IDs
-    TODO: Right now this inspects *all* info offers, we might want to customize that later.
+    Sophisticated inspection system with informed reinspection:
+    1) Load inspection and its InfoOffers
+    2) Call LLM with inspection attributes and known_info
+    3) If LLM chooses offers: return them and update inspection.purchased and user.purchased_info_offers
+    4) If LLM creates child context: create child inspection, wait for offers, recurse
+    5) Create informed reinspection with expanded known_offers and breadth+1
+    6) Return whatever the reinspection returns
     """
-    if purchased is None:
-        purchased = []
     
     # Log task start
     task_id = self.request.id if hasattr(self.request, 'id') else 'unknown'
     log_celery_task(celery_logger, "inspect_task", task_id, {
-        "context_id": context_id,
-        "buyer_id": buyer_id,
-        "depth": depth,
-        "breadth": breadth,
-        "max_depth": max_depth,
-        "max_breadth": max_breadth,
-        "purchased_count": len(purchased)
+        "inspection_id": inspection_id,
+        "max_depth": max_depth
     })
     
     session = Session(engine)
     
     try:
-        if depth >= max_depth or breadth >= max_breadth:
-            # If this is a top-level context and we're hitting limits, restore the max_budget to available_balance
-            if depth == 0:
-                # Load context & buyer to get the max_budget
-                ctx = session.get(DecisionContext, context_id)
-                buyer = session.get(HumanBuyer, buyer_id)
-                if ctx and buyer:
-                    user = session.get(User, buyer.id)
-                    if user:
-                        # Restore the max_budget to available_balance since no purchases were made
-                        user.available_balance += ctx.max_budget
-                        session.add(user)
-                        session.commit()
-            
-            return purchased
+        # Load inspection and related data
+        inspection = session.get(Inspection, inspection_id)
+        if not inspection:
+            log_business_event(celery_logger, "inspection_not_found", parameters={
+                "inspection_id": inspection_id
+            })
+            return []
 
-        # Load context & buyer
-        ctx = session.get(DecisionContext, context_id)
-        buyer = session.get(HumanBuyer, buyer_id)
-        if not ctx or not buyer:
-            return purchased or []
-
-        # 1) Fetch all available InfoOffers for this ctx
-        # not sure about whether we should let them re-inspect inspected offers
-        # but for now we do not TODO
-        offers: List[InfoOffer] = session.exec(
-            select(InfoOffer)
-            .where(InfoOffer.context_id == context_id)
-            .where(InfoOffer.purchased == False)
-            .where(InfoOffer.inspected == False)
-        ).all()
-
-        if not offers:
-            # no more offers to inspect → finish
-            # If this is a top-level context and we're done, restore the max_budget to available_balance
-            if depth == 0:
-                user = session.get(User, buyer.id)
-                if user:
-                    # Restore the max_budget to available_balance since no purchases were made
-                    user.available_balance += ctx.max_budget
-                    session.add(user)
-                    session.commit()
-            
-            return purchased
-
-        # just for the LLM
-        known_info: List[InfoOffer] = []
-        for p in purchased:
-            off = session.get(InfoOffer, p)
-            if off:
-                known_info.append(off)
-
-        # 2) Invoke your LLM with full, private offer data
-        #    Here we assume `call_llm` returns (chosen_offer_ids, child_ctx)
+        buyer = session.get(HumanBuyer, inspection.buyer_id)
+        user = session.get(User, inspection.buyer_id)
+        ctx = inspection.decision_context
+        offers = inspection.info_offers
+        known_info_ids = inspection.known_info
+        depth = inspection.depth
+        breadth = inspection.breadth
         
-        # Get the user to pass their API keys to the LLM
-        user = session.get(User, buyer.id)
-        print(f"DEBUG: {buyer.default_child_llm}")
+        if not ctx or not buyer or not user:
+            log_business_event(celery_logger, "inspection_not_found", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user
+            })
+            print(f"inspection_not_found: {inspection_id}, {ctx}, {buyer}, {user}")
+            return inspection.purchased
+
+        # Check depth limit
+        if depth > max_depth:
+            # If this is a top-level inspection and we're hitting limits, restore the max_budget to available_balance
+            log_business_event(celery_logger, "inspection_depth_limit_reached", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user,
+                "depth": depth,
+                "max_depth": max_depth
+            })
+            print(f"inspection_depth_limit_reached: {inspection_id}, {ctx}, {buyer}, {user}, {depth}, {max_depth}")
+            if depth == 0:
+                user.available_balance += ctx.max_budget
+                inspection.purchased = []
+                session.add(inspection)
+                session.add(user)
+                session.commit()
+            return []
+
+        # Get the corresponding InfoOffers to known_info_ids
+        known_info: List[InfoOffer] = [session.get(InfoOffer, offer_id) for offer_id in known_info_ids]
+
+        # Call LLM with inspection attributes and known_info
         chosen_ids, child_ctx = call_llm(
-            context=ctx, 
-            offers=offers, 
-            known_info=known_info, 
+            context=ctx,
+            offers=offers,
+            known_info=known_info,
             buyer=LLMBuyerType(**buyer.default_child_llm),
             user=user
         )
 
-        for offer in offers:
-            offer.inspected = True
-
         # Increment the buyer's inspected counter for this priority level
         # Only increment once per context, not per offer
         # AND only for the original context (depth=0), not recursive child contexts
-        if depth == 0:
+        if depth == 0 and breadth == 0:
             increment_buyer_inspected_counter(buyer, ctx.priority, session)
 
-        # 3a) If LLM picked any offers → "buy" them
+        # If LLM decides to buy some offers
         if chosen_ids:
-            for oid in chosen_ids:
-                off = session.get(InfoOffer, oid)
-                off.purchased = True
-            purchased.extend(chosen_ids)
+            log_business_event(celery_logger, "inspection_chosen_ids", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user,
+                "chosen_ids": chosen_ids
+            })
+            print(f"inspection_chosen_ids: {inspection_id}, {ctx}, {buyer}, {user}, {chosen_ids}")
+            # Add those to the .purchased of the current inspection (reassign JSON list so SQLAlchemy tracks change)
+            current_purchased = (inspection.purchased or []).copy()
+            current_purchased.extend(chosen_ids)
+            inspection.purchased = current_purchased
+
+            # Update the buyer's owned offers (reassign JSON list)
+            current_owned = (user.purchased_info_offers or []).copy()
+            for offer_id in chosen_ids:
+                if offer_id not in current_owned:
+                    current_owned.append(offer_id)
+            user.purchased_info_offers = current_owned
             
             # Increment the buyer's purchased counter for this priority level
-            # Only increment once per context, not per offer
-            # AND only for the original context (depth=0), not recursive child contexts
-            if depth == 0:
+            if depth == 0 and breadth == 0:
+                log_business_event(celery_logger, "inspection_purchased_increment", parameters={
+                    "inspection_id": inspection_id,
+                    "ctx": ctx,
+                    "buyer": buyer,
+                    "user": user,
+                    "priority": ctx.priority
+                })
+                print(f"inspection_purchased_increment: {inspection_id}, {ctx}, {buyer}, {user}, {ctx.priority}")
                 increment_buyer_purchased_counter(buyer, ctx.priority, session)
                 
                 # Handle balance logic for top-level contexts only
-                # Get the user to update their balance
-                user = session.get(User, buyer.id)
-                if user:
-                    # Calculate total cost of purchased offers
-                    total_cost = sum(off.price for off in offers if off.id in chosen_ids)
-                    # Deduct from actual balance
-                    user.balance -= total_cost
-                    # Restore the max_budget to available_balance
-                    user.available_balance += ctx.max_budget
-                    session.add(user)
+                # Calculate cost of ALL purchases in this inspection tree using computed property
+                total_purchased_offers = session.exec(
+                    select(InfoOffer).where(InfoOffer.id.in_(inspection.total_purchased))
+                ).all()
+                total_cost = sum(off.price for off in total_purchased_offers)
+                log_business_event(celery_logger, "inspection_total_purchased_offers", parameters={
+                    "inspection_id": inspection_id,
+                    "ctx": ctx,
+                    "buyer": buyer,
+                    "user": user,
+                    "total_purchased_offers": [off.id for off in total_purchased_offers],
+                    "total_cost": total_cost
+                })
+                print(f"inspection_total_purchased_offers: {inspection_id}, {ctx}, {buyer}, {user}, {inspection.total_purchased}, {total_cost}")
+                user.balance -= total_cost
+                user.available_balance += ctx.max_budget
+                user.available_balance -= total_cost
+                session.add(user)
             
-            # # remove those offers from future consideration
-            # session.exec(
-            #     select(InfoOffer).where(InfoOffer.id.in_(chosen_ids))
-            # ).scalars().delete(synchronize_session="fetch")
+            session.add(inspection)
+            session.add(user)
             session.commit()
-            # recurse on the same context
-            return inspect_task(
-                context_id=context_id,
-                buyer_id=buyer_id,
-                purchased=purchased,
-                depth=depth,
-                breadth=breadth + 1,
-                max_depth=max_depth,
-                max_breadth=max_breadth,
-            )
+            session.refresh(inspection)
+            
+            return chosen_ids
 
-        # 3b) If LLM returned an empty list *but* wants more info
+        # If LLM decides to spawn a child context
         if child_ctx:
-            # create a new DecisionContext row
+            log_business_event(celery_logger, "inspection_child_ctx", parameters={
+                "inspection_id": inspection_id,
+                "ctx": ctx,
+                "buyer": buyer,
+                "user": user,
+                "child_ctx_id": child_ctx.id
+            })
+            print(f"inspection_child_ctx: {inspection_id}, {ctx}, {buyer}, {user}, {child_ctx.id}")
+            # 1) Create the child context
             session.add(child_ctx)
             session.commit()
             session.refresh(child_ctx)
 
-            # notify sellers via your inbox‑recompute helper
+            # Notify sellers via inbox recompute helper
             recompute_inbox_for_context(child_ctx, session)
 
             # Process BotSellers immediately
@@ -497,9 +523,8 @@ def inspect_task(
                 process_bot_sellers_for_context.delay(child_ctx.id)
             except Exception as e:
                 print(f"Warning: Failed to trigger BotSeller processing: {str(e)}")
-                # Continue with the inspection process even if BotSeller processing fails
 
-            # wait (poll) until InfoOffers appear with a time limit instead of count
+            # Wait for InfoOffers to appear
             start_time = time.time()
             
             try:
@@ -510,7 +535,6 @@ def inspect_task(
                     BOTSELLER_POLL_INTERVAL_SLOW
                 )
             except ImportError:
-                # Fallback to default values if config is not available
                 BOTSELLER_TIMEOUT_SECONDS = 30
                 BOTSELLER_MAX_WAIT_TIME = 60
                 BOTSELLER_POLL_INTERVAL_FAST = 1
@@ -518,55 +542,105 @@ def inspect_task(
             
             while True:
                 count = session.exec(
-                    select(InfoOffer)
-                    .where(InfoOffer.context_id == child_ctx.id)
-                    .where(InfoOffer.purchased == False)
+                    select(InfoOffer).where(InfoOffer.context_id == child_ctx.id)
                 ).count()
                 
                 elapsed_time = time.time() - start_time
                 
-                # Stop waiting if we have offers or if timeout is reached
                 if count > 0 or elapsed_time > BOTSELLER_MAX_WAIT_TIME:
                     break
                 
-                # For BotSellers, we expect faster response, so check more frequently early on
                 if elapsed_time < BOTSELLER_TIMEOUT_SECONDS:
-                    time.sleep(BOTSELLER_POLL_INTERVAL_FAST)  # Check every 1 second for BotSellers
+                    time.sleep(BOTSELLER_POLL_INTERVAL_FAST)
                 else:
-                    time.sleep(BOTSELLER_POLL_INTERVAL_SLOW)  # Check every 3 seconds for human sellers
-            
-            # recurse into the child context
-            # don't need to include a selection of the offers here,
-            # because again we are inspecting all offers
-            return inspect_task(
-                context_id=child_ctx.id,
-                buyer_id=buyer_id,
-                purchased=purchased,
+                    time.sleep(BOTSELLER_POLL_INTERVAL_SLOW)
+
+            # Get child_info_offers from the botsellers etc.
+            child_info_offers = session.exec(
+                select(InfoOffer).where(InfoOffer.context_id == child_ctx.id)
+            ).all()
+
+            # 2) Create an inspection for the child context
+            child_inspection = Inspection(
+                decision_context_id=child_ctx.id,
+                buyer_id=inspection.buyer_id,
+                known_info=known_info_ids.copy(),  # Inherit known_info from parent
+                parent_id=inspection_id,
                 depth=depth + 1,
-                breadth=breadth,
-                max_depth=max_depth,
-                max_breadth=max_breadth,
+                breadth=0,
+                created_at=datetime.utcnow()
+            )
+            session.add(child_inspection)
+            session.commit()
+            session.refresh(child_inspection)
+
+            # Associate child offers with child inspection
+            for offer in child_info_offers:
+                child_inspection.info_offers.append(offer)
+            session.add(child_inspection)
+            session.commit()
+
+            # Update parent inspection to reference child context
+            inspection.child_context_id = child_ctx.id
+            session.add(inspection)
+
+            # Call child inspection
+            child_chosen_offers_ids = inspect_task(
+                inspection_id=child_inspection.id,
+                max_depth=max_depth
             )
 
-        # 4) Nothing to buy and no child → we're done
-        # If this is a top-level context and we're done, restore the max_budget to available_balance
-        if depth == 0:
-            user = session.get(User, buyer.user_id)
-            if user:
-                # Restore the max_budget to available_balance since no purchases were made
-                user.available_balance += ctx.max_budget
-                session.add(user)
-                session.commit()
+            # 3) Create "informed" inspection at same level, with this new info
+            informed_reinspection = Inspection(
+                decision_context_id=ctx.id,
+                buyer_id=inspection.buyer_id,
+                known_info=known_info_ids + child_chosen_offers_ids,  # Add child purchases to known_info
+                informed_repeat_of=inspection_id,
+                depth=depth,
+                breadth=breadth + 1,
+                created_at=datetime.utcnow()
+            )
+            session.add(informed_reinspection)
+            session.commit()
+            session.refresh(informed_reinspection)
+
+            # Associate the same InfoOffers with the reinspection
+            for offer in offers:
+                informed_reinspection.info_offers.append(offer)
+            session.add(informed_reinspection)
+            session.commit()
+
+            # Call reinspection
+            reinspection_offers = inspect_task(
+                inspection_id=informed_reinspection.id,
+                max_depth=max_depth
+            )
+            
+            return reinspection_offers
+
+        # If neither child_ctx nor chosen_ids, we're done and can return []
+        # If this is a top-level inspection and we're done, restore the max_budget to available_balance
         
-        return purchased
+        log_business_event(celery_logger, "inspection_none", parameters={
+            "inspection_id": inspection_id,
+            "ctx": ctx,
+            "buyer": buyer,
+            "user": user,
+            "depth": depth,
+            "breadth": breadth,
+            "purchased": inspection.purchased
+        })
+        print(f"inspection_none: {inspection_id}, {ctx}, {buyer}, {user}, {depth}, {breadth}, {inspection.purchased}")
+        if depth == 0:
+            user.available_balance += ctx.max_budget
+            session.add(user)
+            session.commit()
+        return inspection.purchased
         
     except Exception as e:
         # Log the error
         log_function_error(celery_logger, "inspect_task", e, {
-            "context_id": context_id,
-            "buyer_id": buyer_id,
-            "depth": depth,
-            "breadth": breadth,
+            "inspection_id": inspection_id,
             "task_id": self.request.id if hasattr(self.request, 'id') else 'unknown'
         })
         # Re-raise the exception so Celery can handle it

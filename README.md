@@ -34,15 +34,21 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] make sure rates are correctly counted and maintained
 - [x] let users put their API keys
 - [x] balances
+- [x] balance logic doesn't seem correct -- check line 480 of tasks.py
+- [ ] balance logic still has problems + better handling for the case when the user runs an inspection twice
+- [x] fix the very stupid issue of bot sellers posting stuff every time recompute_inbox is called. We need inbox items to be marked as purchased etc.
 - [ ] allow llm botsellers to have pre-set prices instead of expecting the LLM to generate a price
 - [ ] allow matchers to filter for only recursive contexts (for botsellers)
-- [ ] **recursive answers on answers not bought should not be shown, even if bought**
 - [ ] make sure matcher logic is correct
-  - [ ] case-insenstive matching, or regex-based matching if given a prefix
-  - [ ] make sure all matcher attrs can be set when creating one 
-  - [ ] make sure bot seller matcher inboxes are populated when new matcher is created (they're not)
-  - [ ] maybe instead of having these inboxes update separately we can have it just be a query
-- [ ] make sure balances (both .balance and .available_balance) are updated when bot seller infooffers are bought and sold
+- [ ] allow non-default child LLM buyer
+- [ ] add a proper max_breadth logic -- you don't want LLMs asking questions forever; if breadth exceeds then force it to only return IDs
+
+### inspection improvements
+- [ ] figure out way to show recursive answers: **recursive answers on answers not bought should not be shown, even if bought**
+- [ ] way to access previous recursive info offers in an inspection
+- [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
+- [ ] maybe let people other than original buyer also buy info offers
+- [ ] let user customize how many infooffers child llm should wait for
 
 ### UI improvements
 - [x] fix the profile page mess
@@ -50,19 +56,16 @@ You can use the [infonomy-client](https://github.com/abhimanyupallavisudhir/info
 - [x] UI for adding API keys
 - [x] check if matchers are correctly posted -- because stuff isn't showing up in the inbox for dingdong@gmail.com
 - [x] matcher deletion, update etc.
-- [ ] recursive decision contexts should not appear on the questions list (either at /questions or at /)
-- [ ] make sure correct display for recursive info offers
+- [ ] better error pages
+- [ ] better UI for adding botsellers -- adding pieces of info will be the primary way that people will interact with the system
 
 ### simplificatons made
-- [ ] `inspect_task` inspects *all* info offers -- we might want some way to select specific InfoOffers to inspect, ideally via some google ads kinda thing
-- [ ] maybe let people other than original buyer also buy info offers
-- [ ] let user customize how many infooffers child llm should wait for
 - [ ] let DecisionContexts have "title" and "details"
 
 ### misc infra
 - [x] client library
 - [x] logging=True and better handling of LLM API fails
-- [ ] better logging of full inspection chain
+- [x] better logging of full inspection chain
 - [ ] notifications for InfoOffers received and inspections completed
 - [x] demo notebook
 - [x] demo with a UI maybe

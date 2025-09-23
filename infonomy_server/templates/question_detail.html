@@ -20,9 +20,17 @@
             {% endif %}
             {% if is_question_owner %}
                 <div class="inspection-section">
-                    <button class="btn btn-primary inspect-btn" onclick="startInspection({{ question.id }})" id="inspect-btn">
-                        Start Inspection
-                    </button>
+                    <h3>Inspect Information</h3>
+                    <p>Select the information offers you want to inspect. The AI will analyze them and decide which ones to purchase.</p>
+                    
+                    <div class="inspection-controls">
+                        <button class="btn btn-secondary" onclick="selectAllOffers()" id="select-all-btn">Select All</button>
+                        <button class="btn btn-secondary" onclick="deselectAllOffers()" id="deselect-all-btn">Deselect All</button>
+                        <button class="btn btn-primary inspect-btn" onclick="startInspection({{ question.id }})" id="inspect-btn" disabled>
+                            Start Inspection (<span id="selected-count">0</span> selected)
+                        </button>
+                    </div>
+                    
                     <div class="inspection-status hidden" id="inspection-status">
                         <div class="status-message">Inspection in progress...</div>
                         <div class="progress-bar">
@@ -62,7 +70,7 @@
         {% endif %}
         
         <div class="answers-section">
-            <h3>Answers ({{ info_offers_data|length }})</h3>
+            <h3>Information Offers ({{ info_offers_data|length }})</h3>
             
             {% if info_offers_data %}
                 <div class="answers-list">
@@ -71,8 +79,20 @@
                         {% set human_seller = item.human_seller %}
                         {% set bot_seller = item.bot_seller %}
                         {% set bot_seller_owner = item.bot_seller_owner %}
+                        {% set is_purchased = is_question_owner and answer.id in (user.purchased_info_offers or []) %}
                         
                         <div class="answer-card" data-answer-id="{{ answer.id }}">
+                            {% if is_question_owner and not is_purchased %}
+                                <div class="answer-checkbox">
+                                    <input type="checkbox" 
+                                           id="offer-{{ answer.id }}" 
+                                           class="offer-checkbox" 
+                                           value="{{ answer.id }}"
+                                           onchange="updateInspectionButton()">
+                                    <label for="offer-{{ answer.id }}">Select for inspection</label>
+                                </div>
+                            {% endif %}
+                            
                             <div class="answer-header">
                                 <span class="seller-info">
                                     {% if human_seller %}
@@ -85,6 +105,9 @@
                                 </span>
                                 <span class="price">${{ "%.2f"|format(answer.price) }}</span>
                                 <span class="date">{{ answer.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                {% if is_purchased %}
+                                    <span class="purchased-badge">✓ Purchased</span>
+                                {% endif %}
                             </div>
                             
                             {% if answer.public_info %}
@@ -94,10 +117,14 @@
                             {% endif %}
                             
                             <div class="private-info-section">
-                                {% if is_question_owner and answer.purchased %}
+                                {% if is_purchased %}
                                     <div class="private-info">
                                         <strong>Private Information:</strong>
                                         <div class="private-content">{{ answer.private_info }}</div>
+                                    </div>
+                                {% elif is_question_owner %}
+                                    <div class="private-info-placeholder">
+                                        <em>Private information - select for inspection to view</em>
                                     </div>
                                 {% else %}
                                     <div class="private-info-placeholder">
@@ -109,7 +136,7 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <p>No answers yet. Be the first to provide information!</p>
+                <p>No information offers yet. Be the first to provide information!</p>
             {% endif %}
         </div>
     </div>
@@ -121,9 +148,56 @@
 let inspectionJobId = null;
 let statusCheckInterval = null;
 
+function updateInspectionButton() {
+    const checkboxes = document.querySelectorAll('.offer-checkbox:checked');
+    const selectedCount = checkboxes.length;
+    const inspectBtn = document.getElementById('inspect-btn');
+    const selectedCountSpan = document.getElementById('selected-count');
+    
+    if (selectedCountSpan) {
+        selectedCountSpan.textContent = selectedCount;
+    }
+    if (inspectBtn) {
+        inspectBtn.disabled = selectedCount === 0;
+        
+        if (selectedCount === 0) {
+            inspectBtn.textContent = 'Start Inspection (0 selected)';
+        } else {
+            inspectBtn.textContent = `Start Inspection (${selectedCount} selected)`;
+        }
+    }
+}
+
+function selectAllOffers() {
+    const checkboxes = document.querySelectorAll('.offer-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateInspectionButton();
+}
+
+function deselectAllOffers() {
+    const checkboxes = document.querySelectorAll('.offer-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateInspectionButton();
+}
+
 function startInspection(questionId) {
     const inspectBtn = document.getElementById('inspect-btn');
     const statusDiv = document.getElementById('inspection-status');
+    
+    // Get selected offer IDs
+    const selectedCheckboxes = document.querySelectorAll('.offer-checkbox:checked');
+    const selectedOfferIds = Array.from(selectedCheckboxes).map(checkbox => 
+        parseInt(checkbox.value)
+    );
+    
+    if (selectedOfferIds.length === 0) {
+        alert('Please select at least one information offer to inspect.');
+        return;
+    }
     
     // Disable button and show status
     inspectBtn.disabled = true;
@@ -131,11 +205,15 @@ function startInspection(questionId) {
     statusDiv.classList.remove('hidden');
     
     // Start the inspection
-    fetch(`/api/questions/${questionId}/inspect`, {
+    fetch(`/api/inspection`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({
+            decision_context_id: questionId,
+            info_offer_ids: selectedOfferIds
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -156,7 +234,7 @@ function startInspection(questionId) {
 function checkInspectionStatus() {
     if (!inspectionJobId) return;
     
-    fetch(`/api/jobs/${inspectionJobId}/status`)
+    fetch(`/api/inspection/${inspectionJobId}/status`)
     .then(response => response.json())
     .then(data => {
         const statusDiv = document.getElementById('inspection-status');
@@ -206,7 +284,7 @@ function resetInspectionUI() {
     const statusDiv = document.getElementById('inspection-status');
     
     inspectBtn.disabled = false;
-    inspectBtn.textContent = 'Start Inspection';
+    updateInspectionButton();
     statusDiv.classList.add('hidden');
     
     if (statusCheckInterval) {
@@ -214,15 +292,28 @@ function resetInspectionUI() {
         statusCheckInterval = null;
     }
 }
+
+// Initialize the inspection button state
+document.addEventListener('DOMContentLoaded', function() {
+    updateInspectionButton();
+});
 </script>
 
 <style>
     .inspection-section {
         margin: 1rem 0;
-        padding: 1rem;
+        padding: 1.5rem;
         background: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: 6px;
+    }
+    
+    .inspection-controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin: 1rem 0;
+        flex-wrap: wrap;
     }
     
     .inspect-btn {
@@ -242,6 +333,20 @@ function resetInspectionUI() {
     .inspect-btn:disabled {
         background: #6c757d;
         cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
     }
     
     .inspection-status {
@@ -272,6 +377,56 @@ function resetInspectionUI() {
         display: none;
     }
     
+    .answer-checkbox {
+        margin-bottom: 0.5rem;
+        padding: 0.5rem;
+        background: #e3f2fd;
+        border-radius: 4px;
+        border-left: 4px solid #2196f3;
+    }
+    
+    .answer-checkbox input[type="checkbox"] {
+        margin-right: 0.5rem;
+    }
+    
+    .answer-checkbox label {
+        font-weight: 500;
+        color: #1976d2;
+        cursor: pointer;
+    }
+    
+    .purchased-badge {
+        background: #28a745;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .private-info {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .private-content {
+        margin-top: 0.5rem;
+        white-space: pre-wrap;
+    }
+    
+    .private-info-placeholder {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-top: 0.5rem;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
     .seller-link {
         color: #007bff;
         text-decoration: none;
@@ -286,6 +441,30 @@ function resetInspectionUI() {
     .seller-info {
         font-weight: 500;
         color: #495057;
+    }
+    
+    .answer-card {
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: white;
+    }
+    
+    .answer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .public-info {
+        margin: 0.5rem 0;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 4px;
     }
 </style>
 {% endblock %} 

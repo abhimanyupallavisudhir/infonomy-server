@@ -197,9 +197,7 @@ def read_info_offer(
     
     is_human_seller = (db_info_offer.seller.type == "human_seller" and db_info_offer.seller.id == current_user.id)
     is_bot_seller = (db_info_offer.seller.type == "bot_seller" and db_info_offer.seller.user_id == current_user.id)
-    is_buyer_who_purchased = (
-        db_info_offer.purchased and db_info_offer.context.buyer_id == current_user.id
-    )
+    is_buyer_who_purchased = info_offer_id in current_user.purchased_info_offers
 
     if is_human_seller or is_bot_seller or is_buyer_who_purchased:
         return InfoOfferReadPrivate.from_orm(db_info_offer)
@@ -229,14 +227,14 @@ def read_info_offers_for_decision_context(
     result: List[Union[InfoOfferReadPrivate, InfoOfferReadPublic]] = []
     for offer in offers:
         is_seller = (offer.seller.type == "human_seller" and offer.seller.id == current_user.id)
-        is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
+        is_buyer_who_purchased = offer.id in current_user.purchased_info_offers
 
         if is_seller:
             # seller sees the full private schema
             result.append(InfoOfferReadPrivate.from_orm(offer))
         elif is_buyer_who_purchased:
-            # buyer after purchase sees the public schema
-            result.append(InfoOfferReadPublic.from_orm(offer))
+            # buyer after purchase sees the private schema
+            result.append(InfoOfferReadPrivate.from_orm(offer))
         else:
             # everyone else: public view
             result.append(InfoOfferReadPublic.from_orm(offer))
@@ -265,13 +263,13 @@ def read_info_offers_private_for_decision_context(
     result: List[InfoOfferReadPrivate] = []
     for offer in offers:
         is_seller = (offer.seller.type == "human_seller" and offer.seller.id == current_user.id)
-        is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
+        is_buyer_who_purchased = offer.id in current_user.purchased_info_offers
 
         if is_seller:
             # seller sees the full private schema
             result.append(InfoOfferReadPrivate.from_orm(offer))
         elif is_buyer_who_purchased:
-            # buyer after purchase sees the public schema
+            # buyer after purchase sees the private schema
             result.append(InfoOfferReadPrivate.from_orm(offer))
         
     return result    
@@ -298,7 +296,7 @@ def read_info_offers_public_for_decision_context(
     result: List[InfoOfferReadPrivate] = []
     for offer in offers:
         is_seller = (offer.seller.type == "human_seller" and offer.seller.id == current_user.id)
-        is_buyer_who_purchased = offer.purchased and ctx.buyer_id == current_user.id
+        is_buyer_who_purchased = offer.id in current_user.purchased_info_offers
 
         if not is_seller and not is_buyer_who_purchased:
             result.append(InfoOfferReadPublic.from_orm(offer))
