@@ -213,6 +213,7 @@ class InspectionRead(SQLModel):
     known_info: List[int]
     parent_id: Optional[int]
     informed_repeat_of: Optional[int]
+    informed_repeats_ids: List[int]
     depth: int
     breadth: int
     job_id: Optional[str]

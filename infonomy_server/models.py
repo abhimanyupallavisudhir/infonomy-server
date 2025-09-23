@@ -574,3 +574,11 @@ class Inspection(SQLModel, table=True):
             total.update(child.total_purchased)
         
         return list(total)
+
+    @property
+    def informed_repeats_ids(self) -> List[int]:
+        """
+        Computed property that returns IDs of inspections that are
+        marked as informed repeats of this inspection.
+        """
+        return [insp.id for insp in self.informed_repeats if insp.id is not None]
