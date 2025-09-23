@@ -150,17 +150,28 @@ let statusCheckInterval = null;
 
 function updateInspectionButton() {
     const checkboxes = document.querySelectorAll('.offer-checkbox:checked');
+    const allCheckboxes = document.querySelectorAll('.offer-checkbox');
     const selectedCount = checkboxes.length;
     const inspectBtn = document.getElementById('inspect-btn');
     const selectedCountSpan = document.getElementById('selected-count');
     
-    selectedCountSpan.textContent = selectedCount;
-    inspectBtn.disabled = selectedCount === 0;
+    console.log('updateInspectionButton called');
+    console.log('Total checkboxes:', allCheckboxes.length);
+    console.log('Checked checkboxes:', selectedCount);
+    console.log('Inspect button:', inspectBtn);
+    console.log('Selected count span:', selectedCountSpan);
     
-    if (selectedCount === 0) {
-        inspectBtn.textContent = 'Start Inspection (0 selected)';
-    } else {
-        inspectBtn.textContent = `Start Inspection (${selectedCount} selected)`;
+    if (selectedCountSpan) {
+        selectedCountSpan.textContent = selectedCount;
+    }
+    if (inspectBtn) {
+        inspectBtn.disabled = selectedCount === 0;
+        
+        if (selectedCount === 0) {
+            inspectBtn.textContent = 'Start Inspection (0 selected)';
+        } else {
+            inspectBtn.textContent = `Start Inspection (${selectedCount} selected)`;
+        }
     }
 }
 
@@ -291,7 +302,15 @@ function resetInspectionUI() {
 
 // Initialize the inspection button state
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing inspection button');
     updateInspectionButton();
+    
+    // Debug: log all checkboxes
+    const allCheckboxes = document.querySelectorAll('.offer-checkbox');
+    console.log('Found checkboxes:', allCheckboxes.length);
+    allCheckboxes.forEach((cb, index) => {
+        console.log(`Checkbox ${index}:`, cb.id, cb.checked, cb.value);
+    });
 });
 </script>
 
